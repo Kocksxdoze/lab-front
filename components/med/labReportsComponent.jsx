@@ -55,6 +55,7 @@ import {
   Download,
   RefreshCw,
 } from "lucide-react";
+import { getApiBaseUrl } from "../../utils/api";
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
 
@@ -65,6 +66,7 @@ export default function ReportsPage() {
   const [reportData, setReportData] = useState(null);
   const [error, setError] = useState(null);
   const toast = useToast();
+  const api = getApiBaseUrl();
 
   useEffect(() => {
     loadReportData();
@@ -76,7 +78,7 @@ export default function ReportsPage() {
       setError(null);
 
       const response = await fetch(
-        `http://localhost:4000/report/generate?type=${reportType}&period=${period}`
+        `${api}/report/generate?type=${reportType}&period=${period}`
       );
 
       if (!response.ok) {

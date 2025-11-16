@@ -33,6 +33,7 @@ import {
 } from "@chakra-ui/react";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { getApiBaseUrl } from "../../utils/api";
 
 export default function PatientPage() {
   const { id } = useParams();
@@ -43,6 +44,7 @@ export default function PatientPage() {
   const [loading, setLoading] = useState(false);
   const [sampleType, setSampleType] = useState("Кровь (сыворотка)");
   const toast = useToast();
+  const api = getApiBaseUrl();
 
   const {
     isOpen: isPrintModalOpen,
@@ -60,20 +62,18 @@ export default function PatientPage() {
     try {
       setLoading(true);
 
-      const clientResponse = await fetch(`http://localhost:4000/client/${id}`);
+      const clientResponse = await fetch(`${api}/client/${id}`);
       if (!clientResponse.ok) throw new Error("Ошибка загрузки пациента");
       const client = await clientResponse.json();
       setPatientData(client);
 
-      const labResponse = await fetch(`http://localhost:4000/lab/client/${id}`);
+      const labResponse = await fetch(`${api}/lab/client/${id}`);
       if (labResponse.ok) {
         const labs = await labResponse.json();
         setLabResults(labs);
       }
 
-      const cashResponse = await fetch(
-        `http://localhost:4000/cashbox/client/${id}`
-      );
+      const cashResponse = await fetch(`${api}/cashbox/client/${id}`);
       if (cashResponse.ok) {
         const cash = await cashResponse.json();
         setCashRecords(cash);

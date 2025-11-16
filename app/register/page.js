@@ -42,6 +42,7 @@ import Footer from "../../components/med/footer";
 import ParticlesComponent from "../../components/med/particles";
 import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
+import { getApiBaseUrl } from "../../utils/api";
 
 function Register() {
   const formRef = useRef({});
@@ -61,6 +62,7 @@ function Register() {
   const searchInputRef = useRef(null);
   const router = useRouter();
   const toast = useToast();
+  const api = getApiBaseUrl();
 
   const {
     isOpen: isLabOpen,
@@ -137,9 +139,9 @@ function Register() {
       try {
         setLoading(true);
         const [promos, bens, labs] = await Promise.all([
-          fetch(`http://localhost:4000/promocodes`).then((r) => r.json()),
-          fetch(`http://localhost:4000/benefits`).then((r) => r.json()),
-          fetch(`http://localhost:4000/lab-categories`).then((r) => r.json()),
+          fetch(`${api}/promocodes`).then((r) => r.json()),
+          fetch(`${api}/benefits`).then((r) => r.json()),
+          fetch(`${api}/lab-categories`).then((r) => r.json()),
         ]);
 
         setPromoCodes(Array.isArray(promos) ? promos : []);
@@ -398,14 +400,11 @@ function Register() {
         registrationDate: new Date().toISOString().split("T")[0],
       };
 
-      const clientResponse = await fetch(
-        `http://localhost:4000/client/create`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(clientData),
-        }
-      );
+      const clientResponse = await fetch(`${api}/client/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(clientData),
+      });
 
       if (!clientResponse.ok) {
         const errorData = await clientResponse.json();
@@ -448,7 +447,7 @@ function Register() {
 
             console.log("📤 Отправка анализа:", labData);
 
-            return fetch(`http://localhost:4000/lab/new`, {
+            return fetch(`${api}/lab/new`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(labData),
@@ -487,7 +486,7 @@ function Register() {
 
             console.log("📤 Отправка теста:", labData);
 
-            return fetch(`http://localhost:4000/lab/new`, {
+            return fetch(`${api}/lab/new`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(labData),
@@ -532,7 +531,7 @@ function Register() {
 
       console.log("💰 Создание записи в кассе:", cashData);
 
-      const cashResponse = await fetch(`http://localhost:4000/cashbox/create`, {
+      const cashResponse = await fetch(`${api}/cashbox/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(cashData),

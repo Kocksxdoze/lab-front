@@ -41,7 +41,7 @@ function GraphOne() {
   const [loading, setLoading] = useState(true);
   const api = getApiBaseUrl();
   useEffect(() => {
-    fetch(`http://localhost:4000/cashbox`)
+    fetch(`${api}/cashbox`)
       .then((response) => response.json())
       .then((data) => {
         setData(data);

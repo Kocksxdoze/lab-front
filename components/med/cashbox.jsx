@@ -70,7 +70,7 @@ function Cashbox() {
   const loadCashRecords = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:4000/cashbox`);
+      const response = await fetch(`${api}/cashbox`);
       if (!response.ok) throw new Error("Ошибка загрузки кассы");
 
       const data = await response.json();
@@ -84,9 +84,7 @@ function Cashbox() {
       await Promise.all(
         clientIds.map(async (clientId) => {
           try {
-            const response = await fetch(
-              `http://localhost:4000/client/${clientId}`
-            );
+            const response = await fetch(`${api}/client/${clientId}`);
             if (response.ok) {
               const client = await response.json();
               clientsData[clientId] = client;
@@ -211,7 +209,7 @@ function Cashbox() {
       }
 
       const response = await fetch(
-        `http://localhost:4000/cashbox/update/${selectedRecord.id}`,
+        `${api}/cashbox/update/${selectedRecord.id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
