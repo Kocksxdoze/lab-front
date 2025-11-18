@@ -60,7 +60,7 @@ function Header() {
 
   useEffect(() => {
     const fetchReports = async () => {
-      const response = await fetch(`http://localhost:4000/reports`);
+      const response = await fetch(`${api}/reports`);
       const data = await response.json();
       if (response.ok) {
         setReports(data);
@@ -71,7 +71,7 @@ function Header() {
 
   const clients = async () => {
     try {
-      const response = await fetch(`http://localhost:4000/clients`);
+      const response = await fetch(`${api}/clients`);
       const data = await response.json();
       console.log(data);
 
@@ -233,7 +233,13 @@ function Header() {
             </Button>
           )}
 
-          {hasAccess(["registration", "admin"]) && (
+          {hasAccess([
+            "registration",
+            "accountant",
+            "doctors",
+            "laboratory",
+            "admin",
+          ]) && (
             <Button
               bg={"#fff"}
               color={"#000"}
@@ -251,7 +257,13 @@ function Header() {
             </Button>
           )}
 
-          {hasAccess(["registration", "admin"]) && (
+          {hasAccess([
+            "registration",
+            "accountant",
+            "doctors",
+            "laboratory",
+            "admin",
+          ]) && (
             <Button
               bg={"#fff"}
               color={"#000"}
@@ -269,25 +281,7 @@ function Header() {
             </Button>
           )}
 
-          {hasAccess("registration") && (
-            <Button
-              bg={"#fff"}
-              color={"#000"}
-              border={"1px solid transparent"}
-              borderRadius={"8px"}
-              fontWeight={"600"}
-              _hover={{
-                color: "#fff",
-                background: "#0052b4",
-                border: "1px solid transparent",
-              }}
-              onClick={() => router.push("/palates")}
-            >
-              Палаты
-            </Button>
-          )}
-
-          {hasAccess(["accountant", "admin"]) && (
+          {hasAccess(["registration", "accountant", "admin"]) && (
             <Button
               bg={"#fff"}
               color={"#000"}
@@ -305,7 +299,13 @@ function Header() {
             </Button>
           )}
 
-          {hasAccess(["doctors", "admin"]) && (
+          {hasAccess([
+            "registration",
+            "accountant",
+            "doctors",
+            "laboratory",
+            "admin",
+          ]) && (
             <Button
               bg={"#fff"}
               color={"#000"}
@@ -323,7 +323,13 @@ function Header() {
             </Button>
           )}
 
-          {hasAccess(["laboratory", "admin"]) && (
+          {hasAccess([
+            "registration",
+            "accountant",
+            "doctors",
+            "laboratory",
+            "admin",
+          ]) && (
             <Button
               bg={"#fff"}
               color={"#000"}
@@ -369,43 +375,6 @@ function Header() {
                 <MenuItem onClick={() => router.push("/settings/benefits")}>
                   Категории льгот
                 </MenuItem>
-              </MenuList>
-            </Menu>
-          )}
-
-          {hasAccess([
-            "registration",
-            "accountant",
-            "doctors",
-            "laboratory",
-            "admin",
-          ]) && (
-            <Menu>
-              <MenuButton
-                as={Button}
-                bg={"#fff"}
-                color={"#000"}
-                border={"1px solid transparent"}
-                borderRadius={"8px"}
-                fontWeight={"600"}
-                _hover={{
-                  color: "#fff",
-                  background: "#0052b4",
-                  border: "1px solid transparent",
-                }}
-                rightIcon={<ChevronDownIcon />}
-              >
-                Отчеты
-              </MenuButton>
-              <MenuList zIndex={"999"}>
-                {reports.map((report, indx) => (
-                  <MenuItem
-                    key={report.id}
-                    onClick={() => router.push(`/report/${report.id}`)}
-                  >
-                    {report.name}
-                  </MenuItem>
-                ))}
               </MenuList>
             </Menu>
           )}

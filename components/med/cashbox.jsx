@@ -67,6 +67,45 @@ function Cashbox() {
     loadCashRecords();
   }, []);
 
+  // Функция для правильного парсинга даты
+  const parseDate = (dateString) => {
+    if (!dateString) return new Date();
+
+    // Пробуем разные форматы даты
+    let date = new Date(dateString);
+
+    // Если дата невалидна, пробуем парсить как timestamp
+    if (isNaN(date.getTime())) {
+      date = new Date(parseInt(dateString));
+    }
+
+    // Если все еще невалидна, возвращаем текущую дату
+    if (isNaN(date.getTime())) {
+      console.warn("Invalid date:", dateString);
+      return new Date();
+    }
+
+    return date;
+  };
+
+  // Функция форматирования даты для таблицы
+  const formatDateForTable = (dateString) => {
+    const date = parseDate(dateString);
+    return date.toLocaleDateString("ru-RU");
+  };
+
+  // Функция форматирования даты и времени для чека
+  const formatDateTimeForReceipt = (dateString) => {
+    const date = parseDate(dateString);
+    return {
+      date: date.toLocaleDateString("ru-RU"),
+      time: date.toLocaleTimeString("ru-RU", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+  };
+
   const loadCashRecords = async () => {
     setLoading(true);
     try {
@@ -75,6 +114,10 @@ function Cashbox() {
 
       const data = await response.json();
       const records = Array.isArray(data) ? data : [];
+
+      // Логируем для отладки
+      console.log("Loaded records:", records);
+
       setCashRecords(records);
 
       // Загружаем данные клиентов
@@ -142,7 +185,7 @@ function Cashbox() {
     // Фильтр по периоду
     let periodMatch = true;
     if (filterPeriod !== "all") {
-      const recordDate = new Date(record.transactionDate);
+      const recordDate = parseDate(record.transactionDate);
       const today = new Date();
 
       if (filterPeriod === "today") {
@@ -173,11 +216,11 @@ function Cashbox() {
 
   const getPaymentMethodLabel = (method) => {
     const methods = {
-      cash: "💵 Наличные",
-      card: "💳 Карта",
-      transfer: "🏦 Перевод",
-      terminal: "📱 Терминал",
-      mixed: "🔀 Смешанный",
+      cash: " Наличные",
+      card: " Карта",
+      transfer: " Перевод",
+      terminal: " Терминал",
+      mixed: " Смешанный",
     };
     return methods[method] || method;
   };
@@ -249,6 +292,8 @@ function Cashbox() {
 
   const printReceipt = (record) => {
     const client = clients[record.clientId];
+    const { date, time } = formatDateTimeForReceipt(record.transactionDate);
+
     const receiptHTML = `
       <!DOCTYPE html>
       <html>
@@ -298,15 +343,11 @@ function Cashbox() {
         
         <div class="row">
           <span>Дата:</span>
-          <span>${new Date(record.transactionDate).toLocaleDateString(
-            "ru-RU"
-          )}</span>
+          <span>${date}</span>
         </div>
         <div class="row">
           <span>Время:</span>
-          <span>${new Date(record.transactionDate).toLocaleTimeString(
-            "ru-RU"
-          )}</span>
+          <span>${time}</span>
         </div>
         
         <div class="divider"></div>
@@ -526,7 +567,7 @@ function Cashbox() {
               <Tr key={record.id} _hover={{ bg: "gray.50" }}>
                 <Td fontWeight="medium">{record.id}</Td>
                 <Td fontSize="xs">
-                  {new Date(record.transactionDate).toLocaleDateString("ru-RU")}
+                  {formatDateForTable(record.transactionDate)}
                 </Td>
                 <Td>{getClientName(record.clientId)}</Td>
                 <Td>{getClientPhone(record.clientId)}</Td>

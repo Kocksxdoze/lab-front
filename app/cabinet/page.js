@@ -52,6 +52,11 @@ import {
   Tab,
   TabPanel,
   Grid,
+  NumberInput,
+  NumberInputField,
+  Alert,
+  AlertIcon,
+  AlertDescription,
 } from "@chakra-ui/react";
 import {
   ChevronDownIcon,
@@ -60,6 +65,7 @@ import {
   CheckCircleIcon,
   WarningIcon,
   SettingsIcon,
+  InfoIcon,
 } from "@chakra-ui/icons";
 import Cookies from "js-cookie";
 import jwt from "jsonwebtoken";
@@ -86,6 +92,11 @@ function Cabinet() {
     ready: false,
     method: "",
     notes: "",
+    // 🔥 Добавляем референтные значения
+    unit: "",
+    referenceMin: null,
+    referenceMax: null,
+    referenceText: "",
   });
 
   useEffect(() => {
@@ -105,7 +116,7 @@ function Cabinet() {
   const loadLabTests = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:4000/labs`);
+      const response = await fetch(`${api}/labs`);
       if (!response.ok) throw new Error("Ошибка загрузки анализов");
 
       const data = await response.json();
@@ -114,7 +125,7 @@ function Cabinet() {
         data.map(async (test) => {
           try {
             const clientResponse = await fetch(
-              `http://localhost:4000/client/${test.clientId}`
+              `${api}/client/${test.clientId}`
             );
             if (clientResponse.ok) {
               const client = await clientResponse.json();
@@ -149,6 +160,11 @@ function Cabinet() {
       ready: test.ready || false,
       method: test.method || "",
       notes: test.notes || "",
+      // 🔥 Загружаем референтные значения
+      unit: test.unit || "",
+      referenceMin: test.referenceMin,
+      referenceMax: test.referenceMax,
+      referenceText: test.referenceText || "",
     });
     onOpen();
   };
@@ -165,20 +181,36 @@ function Cabinet() {
       return;
     }
 
+    // 🔥 Проверяем наличие референтных значений
+    if (
+      testResult.ready &&
+      !testResult.referenceText &&
+      testResult.referenceMin === null &&
+      testResult.referenceMax === null
+    ) {
+      toast({
+        title: "Внимание",
+        description:
+          "Референтные значения не указаны. Рекомендуется их добавить.",
+        status: "warning",
+        duration: 5000,
+      });
+    }
+
     try {
       setLoading(true);
 
       let isAbnormal = testResult.isAbnormal;
       if (
         testResult.result &&
-        selectedTest.referenceMin !== null &&
-        selectedTest.referenceMax !== null
+        testResult.referenceMin !== null &&
+        testResult.referenceMax !== null
       ) {
         const numResult = parseFloat(testResult.result);
         if (!isNaN(numResult)) {
           isAbnormal =
-            numResult < selectedTest.referenceMin ||
-            numResult > selectedTest.referenceMax;
+            numResult < testResult.referenceMin ||
+            numResult > testResult.referenceMax;
         }
       }
 
@@ -189,14 +221,11 @@ function Cabinet() {
         executedBy: user ? `${user.surname} ${user.name}` : "Неизвестно",
       };
 
-      const response = await fetch(
-        `http://localhost:4000/lab/update/${selectedTest.id}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updateData),
-        }
-      );
+      const response = await fetch(`${api}/lab/update/${selectedTest.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      });
 
       if (!response.ok) throw new Error("Ошибка сохранения результатов");
 
@@ -243,12 +272,10 @@ function Cabinet() {
     <Flex flexDir="column" minH="100vh" position="relative">
       <ParticlesComponent />
 
-      {/* Header */}
       <Box position="relative" zIndex={10} px="50px">
         <Header />
       </Box>
 
-      {/* Main Content */}
       <Box
         flex="1"
         position="relative"
@@ -258,10 +285,9 @@ function Cabinet() {
         display="flex"
         justifyContent="center"
         alignItems="flex-start"
-        minH="calc(100vh - 160px)" // Вычитаем примерную высоту header и footer
+        minH="calc(100vh - 160px)"
       >
         <Box w="full" maxW="1400px">
-          {/* Профиль доктора */}
           <Card mb={8} shadow="lg" borderRadius="2xl" w="full">
             <CardBody p={6}>
               <Grid templateColumns={{ base: "1fr", lg: "300px 1fr" }} gap={8}>
@@ -358,7 +384,6 @@ function Cabinet() {
                     </TabList>
 
                     <TabPanels>
-                      {/* Панель рабочей области */}
                       <TabPanel p={0}>
                         <SimpleGrid
                           columns={{ base: 1, md: 3 }}
@@ -427,7 +452,6 @@ function Cabinet() {
                           </Card>
                         </SimpleGrid>
 
-                        {/* Таблица анализов с фиксированной высотой и скроллом */}
                         <Card>
                           <CardHeader>
                             <Text fontSize="xl" fontWeight="bold">
@@ -442,7 +466,7 @@ function Cabinet() {
                             ) : labTests.length > 0 ? (
                               <Box
                                 overflowX="auto"
-                                maxH="500px" // Фиксированная высота для скролла
+                                maxH="500px"
                                 overflowY="auto"
                               >
                                 <Table variant="simple" size="sm">
@@ -457,6 +481,7 @@ function Cabinet() {
                                       <Th>Пациент</Th>
                                       <Th>Тест</Th>
                                       <Th>Результат</Th>
+                                      <Th>Норма</Th>
                                       <Th>Статус</Th>
                                       <Th>Дата</Th>
                                       <Th>Действия</Th>
@@ -505,6 +530,13 @@ function Cabinet() {
                                             <Text color="gray.400">—</Text>
                                           )}
                                         </Td>
+                                        <Td fontSize="xs">
+                                          {test.referenceText ||
+                                            (test.referenceMin !== null &&
+                                            test.referenceMax !== null
+                                              ? `${test.referenceMin}-${test.referenceMax}`
+                                              : "—")}
+                                        </Td>
                                         <Td>
                                           {test.ready ? (
                                             <Badge colorScheme="green">
@@ -548,7 +580,6 @@ function Cabinet() {
                         </Card>
                       </TabPanel>
 
-                      {/* Панель статистики */}
                       <TabPanel>
                         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
                           <Card>
@@ -648,7 +679,6 @@ function Cabinet() {
                         </SimpleGrid>
                       </TabPanel>
 
-                      {/* Панель профиля */}
                       <TabPanel>
                         <Card>
                           <CardHeader>
@@ -701,15 +731,14 @@ function Cabinet() {
         </Box>
       </Box>
 
-      {/* Footer */}
       <Box position="relative" zIndex={10} px="50px" mt="auto">
         <Footer />
       </Box>
 
-      {/* Модальное окно заполнения результатов */}
-      <Modal isOpen={isOpen} onClose={onClose} size="xl">
+      {/* 🔥 Улучшенное модальное окно с референтными значениями */}
+      <Modal isOpen={isOpen} onClose={onClose} size="2xl">
         <ModalOverlay />
-        <ModalContent>
+        <ModalContent maxW="900px">
           <ModalHeader>Заполнение результатов анализа</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
@@ -746,34 +775,151 @@ function Cabinet() {
                   </CardBody>
                 </Card>
 
-                {/* Форма заполнения */}
-                <FormControl isRequired={testResult.ready}>
-                  <FormLabel>Результат анализа</FormLabel>
-                  <Input
-                    value={testResult.result}
-                    onChange={(e) =>
-                      setTestResult({
-                        ...testResult,
-                        result: e.target.value,
-                      })
-                    }
-                    placeholder="Введите числовое значение или текст"
-                  />
-                </FormControl>
+                {/* 🔥 Предупреждение если нет референтных значений */}
+                {!testResult.referenceText &&
+                  testResult.referenceMin === null &&
+                  testResult.referenceMax === null && (
+                    <Alert status="warning">
+                      <AlertIcon />
+                      <AlertDescription>
+                        <strong>Внимание:</strong> Референтные значения не
+                        указаны. Пожалуйста, заполните их для корректной
+                        интерпретации результатов.
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
-                <FormControl>
-                  <FormLabel>Метод исследования</FormLabel>
-                  <Input
-                    value={testResult.method}
-                    onChange={(e) =>
-                      setTestResult({
-                        ...testResult,
-                        method: e.target.value,
-                      })
-                    }
-                    placeholder="Например: Спектрофотометрия"
-                  />
-                </FormControl>
+                {/* 🔥 Блок референтных значений */}
+                <Card bg="blue.50" variant="outline">
+                  <CardHeader py={3}>
+                    <HStack>
+                      <InfoIcon color="blue.500" />
+                      <Text fontWeight="bold" color="blue.700">
+                        Референтные значения и единицы измерения
+                      </Text>
+                    </HStack>
+                  </CardHeader>
+                  <CardBody>
+                    <SimpleGrid columns={2} spacing={4}>
+                      <FormControl>
+                        <FormLabel fontSize="sm">Единица измерения</FormLabel>
+                        <Input
+                          value={testResult.unit}
+                          onChange={(e) =>
+                            setTestResult({
+                              ...testResult,
+                              unit: e.target.value,
+                            })
+                          }
+                          placeholder="г/л, ммоль/л, %"
+                          size="sm"
+                        />
+                      </FormControl>
+
+                      <FormControl>
+                        <FormLabel fontSize="sm">
+                          Референтный текст (если есть)
+                        </FormLabel>
+                        <Input
+                          value={testResult.referenceText}
+                          onChange={(e) =>
+                            setTestResult({
+                              ...testResult,
+                              referenceText: e.target.value,
+                            })
+                          }
+                          placeholder="Например: Отрицательно"
+                          size="sm"
+                        />
+                      </FormControl>
+
+                      <FormControl>
+                        <FormLabel fontSize="sm">
+                          Минимальное значение
+                        </FormLabel>
+                        <NumberInput
+                          value={testResult.referenceMin ?? ""}
+                          onChange={(valueString) =>
+                            setTestResult({
+                              ...testResult,
+                              referenceMin:
+                                valueString === ""
+                                  ? null
+                                  : parseFloat(valueString),
+                            })
+                          }
+                          size="sm"
+                        >
+                          <NumberInputField placeholder="Например: 120" />
+                        </NumberInput>
+                      </FormControl>
+
+                      <FormControl>
+                        <FormLabel fontSize="sm">
+                          Максимальное значение
+                        </FormLabel>
+                        <NumberInput
+                          value={testResult.referenceMax ?? ""}
+                          onChange={(valueString) =>
+                            setTestResult({
+                              ...testResult,
+                              referenceMax:
+                                valueString === ""
+                                  ? null
+                                  : parseFloat(valueString),
+                            })
+                          }
+                          size="sm"
+                        >
+                          <NumberInputField placeholder="Например: 160" />
+                        </NumberInput>
+                      </FormControl>
+                    </SimpleGrid>
+
+                    {testResult.referenceMin !== null &&
+                      testResult.referenceMax !== null && (
+                        <Box mt={3} p={2} bg="white" borderRadius="md">
+                          <Text fontSize="sm" color="gray.600">
+                            <strong>Норма:</strong> {testResult.referenceMin} -{" "}
+                            {testResult.referenceMax} {testResult.unit}
+                          </Text>
+                        </Box>
+                      )}
+                  </CardBody>
+                </Card>
+
+                <Divider />
+
+                {/* Форма заполнения результата */}
+                <SimpleGrid columns={2} spacing={4}>
+                  <FormControl isRequired={testResult.ready}>
+                    <FormLabel>Результат анализа</FormLabel>
+                    <Input
+                      value={testResult.result}
+                      onChange={(e) =>
+                        setTestResult({
+                          ...testResult,
+                          result: e.target.value,
+                        })
+                      }
+                      placeholder="Введите числовое значение или текст"
+                    />
+                  </FormControl>
+
+                  <FormControl>
+                    <FormLabel>Метод исследования</FormLabel>
+                    <Input
+                      value={testResult.method}
+                      onChange={(e) =>
+                        setTestResult({
+                          ...testResult,
+                          method: e.target.value,
+                        })
+                      }
+                      placeholder="Например: Спектрофотометрия"
+                    />
+                  </FormControl>
+                </SimpleGrid>
 
                 <FormControl>
                   <FormLabel>Заключение врача-лаборанта</FormLabel>
@@ -787,6 +933,21 @@ function Cabinet() {
                     }
                     placeholder="Введите заключение по результатам анализа"
                     rows={3}
+                  />
+                </FormControl>
+
+                <FormControl>
+                  <FormLabel>Дополнительные заметки</FormLabel>
+                  <Textarea
+                    value={testResult.notes}
+                    onChange={(e) =>
+                      setTestResult({
+                        ...testResult,
+                        notes: e.target.value,
+                      })
+                    }
+                    placeholder="Примечания или особые условия"
+                    rows={2}
                   />
                 </FormControl>
 
@@ -815,6 +976,31 @@ function Cabinet() {
                     <Text fontWeight="bold">Результат готов</Text>
                   </Checkbox>
                 </HStack>
+
+                {/* 🔥 Автоматическая проверка отклонений */}
+                {testResult.result &&
+                  testResult.referenceMin !== null &&
+                  testResult.referenceMax !== null &&
+                  !isNaN(parseFloat(testResult.result)) && (
+                    <Alert
+                      status={
+                        parseFloat(testResult.result) <
+                          testResult.referenceMin ||
+                        parseFloat(testResult.result) > testResult.referenceMax
+                          ? "error"
+                          : "success"
+                      }
+                    >
+                      <AlertIcon />
+                      <AlertDescription>
+                        {parseFloat(testResult.result) <
+                          testResult.referenceMin ||
+                        parseFloat(testResult.result) > testResult.referenceMax
+                          ? `⚠️ Результат ${testResult.result} ${testResult.unit} выходит за пределы нормы (${testResult.referenceMin}-${testResult.referenceMax} ${testResult.unit})`
+                          : `✓ Результат ${testResult.result} ${testResult.unit} в пределах нормы (${testResult.referenceMin}-${testResult.referenceMax} ${testResult.unit})`}
+                      </AlertDescription>
+                    </Alert>
+                  )}
               </VStack>
             )}
           </ModalBody>

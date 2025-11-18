@@ -62,30 +62,6 @@ function Main() {
           >
             Отчеты по лаборатории
           </Button>
-          <Button
-            fontWeight={"500"}
-            w={"auto"}
-            h={"auto"}
-            py={"10px"}
-            bg={"white"}
-            shadow={"xl"}
-            borderRadius={"8px"}
-            onClick={() => router.push("/doctors-reports")}
-          >
-            Отчеты по врачам
-          </Button>
-          <Button
-            fontWeight={"500"}
-            w={"auto"}
-            h={"auto"}
-            py={"10px"}
-            bg={"white"}
-            shadow={"xl"}
-            borderRadius={"8px"}
-            onClick={() => router.push("/offers-reports")}
-          >
-            Отчеты по пациентам
-          </Button>
 
           <Button
             fontWeight={"500"}
@@ -123,7 +99,18 @@ function Main() {
           >
             Филлиалы
           </Button>
-         
+          <Button
+            fontWeight={"500"}
+            w={"auto"}
+            h={"auto"}
+            py={"10px"}
+            bg={"white"}
+            shadow={"xl"}
+            borderRadius={"8px"}
+            onClick={() => router.push("/settings/benefits")}
+          >
+            Категории льгот
+          </Button>
         </Flex>
       </Box>
       <Box
