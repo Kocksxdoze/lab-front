@@ -29,6 +29,7 @@ function Patients() {
   const [filterDebt, setFilterDebt] = useState("all");
   const [sortBy, setSortBy] = useState("id");
   const [loading, setLoading] = useState(false);
+  const [labStats, setLabStats] = useState({});
   const router = useRouter();
   const api = getApiBaseUrl();
 
@@ -52,10 +53,44 @@ function Patients() {
 
       const data = await response.json();
       setPatients(Array.isArray(data) ? data : []);
+
+      // Загружаем статистику анализов для каждого пациента
+      await loadLabStats(data);
     } catch (error) {
       console.error("Ошибка загрузки пациентов:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadLabStats = async (patientsList) => {
+    try {
+      const stats = {};
+      await Promise.all(
+        patientsList.map(async (patient) => {
+          try {
+            const response = await fetch(`${api}/lab/client/${patient.id}`);
+            if (response.ok) {
+              const labs = await response.json();
+              const readyCount = labs.filter((lab) => lab.ready).length;
+              const inProgressCount = labs.filter((lab) => !lab.ready).length;
+              stats[patient.id] = {
+                ready: readyCount,
+                inProgress: inProgressCount,
+                total: labs.length,
+              };
+            }
+          } catch (err) {
+            console.error(
+              `Ошибка загрузки анализов для пациента ${patient.id}:`,
+              err
+            );
+          }
+        })
+      );
+      setLabStats(stats);
+    } catch (error) {
+      console.error("Ошибка загрузки статистики анализов:", error);
     }
   };
 
@@ -196,6 +231,7 @@ function Patients() {
                 <Th>Пол</Th>
                 <Th>Телефон</Th>
                 <Th>Дата регистрации</Th>
+                <Th>Статус анализов</Th>
                 <Th>Долг</Th>
                 <Th>Регистратор</Th>
               </Tr>
@@ -224,6 +260,31 @@ function Patients() {
                     {patient.createdAt
                       ? new Date(patient.createdAt).toLocaleDateString("ru-RU")
                       : "—"}
+                  </Td>
+                  <Td>
+                    {labStats[patient.id] ? (
+                      <HStack spacing={2}>
+                        {labStats[patient.id].ready > 0 && (
+                          <Badge colorScheme="green" fontSize="xs">
+                            ✓ {labStats[patient.id].ready}
+                          </Badge>
+                        )}
+                        {labStats[patient.id].inProgress > 0 && (
+                          <Badge colorScheme="yellow" fontSize="xs">
+                            ⏳ {labStats[patient.id].inProgress}
+                          </Badge>
+                        )}
+                        {labStats[patient.id].total === 0 && (
+                          <Badge colorScheme="gray" fontSize="xs">
+                            Нет анализов
+                          </Badge>
+                        )}
+                      </HStack>
+                    ) : (
+                      <Badge colorScheme="gray" fontSize="xs">
+                        —
+                      </Badge>
+                    )}
                   </Td>
                   <Td>
                     {(patient.debt || 0) > 0 ? (

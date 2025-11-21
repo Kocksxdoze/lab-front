@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Box,
   Flex,
@@ -13,11 +13,11 @@ import {
   MenuList,
   MenuItem,
   InputGroup,
-  InputRightElement,
+  List,
+  ListItem,
 } from "@chakra-ui/react";
 import { useRouter } from "next/navigation";
-import { ChevronDownIcon, SearchIcon } from "@chakra-ui/icons";
-import fetcher from "../../utils/fetcher";
+import { ChevronDownIcon } from "@chakra-ui/icons";
 import Cookies from "js-cookie";
 import jwt from "jsonwebtoken";
 import { getApiBaseUrl } from "../../utils/api";
@@ -28,20 +28,75 @@ function Header() {
   const [weekday, setWeekday] = useState("");
   const router = useRouter();
   const [clientsCount, setClientsCount] = useState(0);
+  const [allClients, setAllClients] = useState([]);
   const toast = useToast();
-  const [remainingTime, setRemainingTime] = useState(3600);
   const [reports, setReports] = useState([]);
   const api = getApiBaseUrl();
   const token = Cookies.get("token");
   const decoded = jwt.decode(token);
   const role = decoded?.role;
   const [searchQuery, setSearchQuery] = useState("");
+  const [filteredClients, setFilteredClients] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchRef = useRef(null);
 
   const handleSearch = (e) => {
     if (e.key === "Enter" && searchQuery.trim()) {
       router.push(`/patients?search=${encodeURIComponent(searchQuery.trim())}`);
+      setShowDropdown(false);
     }
   };
+
+  const handleInputChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+
+    if (query.trim() === "") {
+      setFilteredClients([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    // Фильтруем клиентов по ID или ФИО
+    const filtered = allClients.filter((client) => {
+      const searchLower = query.toLowerCase();
+
+      // Поиск по ID
+      const idMatch = client.id?.toString().includes(query);
+
+      // Поиск по ФИО (surname - фамилия, name - имя, lastName - отчество)
+      const nameMatch =
+        client.surname?.toLowerCase().includes(searchLower) ||
+        client.name?.toLowerCase().includes(searchLower) ||
+        client.lastName?.toLowerCase().includes(searchLower) ||
+        `${client.surname || ""} ${client.name || ""} ${client.lastName || ""}`
+          .toLowerCase()
+          .includes(searchLower);
+
+      return idMatch || nameMatch;
+    });
+
+    setFilteredClients(filtered.slice(0, 10)); // Ограничиваем до 10 результатов
+    setShowDropdown(filtered.length > 0);
+  };
+
+  const handleClientSelect = (clientId) => {
+    router.push(`/patient/${clientId}`);
+    setSearchQuery("");
+    setShowDropdown(false);
+  };
+
+  // Закрытие выпадающего списка при клике вне области поиска
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const updateTime = () => {
@@ -76,6 +131,7 @@ function Header() {
       console.log(data);
 
       if (response.ok) {
+        setAllClients(data); // Сохраняем всех клиентов для поиска
         setClientsCount(data.length);
         console.log("Data: ", data);
         toast({
@@ -96,6 +152,7 @@ function Header() {
       console.log("error:", error);
     }
   };
+
   useEffect(() => {
     clients();
   }, []);
@@ -107,6 +164,15 @@ function Header() {
   // Check if user has access to a specific role
   const hasAccess = (allowedRoles) => {
     return allowedRoles.includes(role);
+  };
+
+  // Функция для отображения имени клиента
+  const getClientDisplayName = (client) => {
+    const fullName = `${client.surname || ""} ${client.name || ""} ${
+      client.lastName || ""
+    }`.trim();
+
+    return fullName || `Пациент ID: ${client.id}`;
   };
 
   return (
@@ -150,43 +216,74 @@ function Header() {
             </Box>
           </Heading>
 
-          <InputGroup w={"35%"}>
-            <Input
-              placeholder="Пац ID или Ф.И.О."
-              bg={"transparent"}
-              border={0}
-              outline={"none"}
-              fontSize={"16px"}
-              p={"10px 0"}
-              borderBottom={"1px solid #000"}
-              borderRadius={0}
-              color={"#000"}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={handleSearch}
-              _focus={{
-                outline: "none",
-                boxShadow: "none",
-                borderBottom: "1px solid #000",
-              }}
-            />
-            <InputRightElement>
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (searchQuery.trim()) {
-                    router.push(
-                      `/patients?search=${encodeURIComponent(
-                        searchQuery.trim()
-                      )}`
-                    );
+          <Box w={"35%"} position={"relative"} ref={searchRef}>
+            <InputGroup>
+              <Input
+                placeholder="Пац ID или Ф.И.О."
+                bg={"transparent"}
+                border={0}
+                outline={"none"}
+                fontSize={"16px"}
+                p={"10px 0"}
+                borderBottom={"1px solid #000"}
+                borderRadius={0}
+                color={"#000"}
+                value={searchQuery}
+                onChange={handleInputChange}
+                onKeyDown={handleSearch}
+                onFocus={() => {
+                  if (filteredClients.length > 0) {
+                    setShowDropdown(true);
                   }
                 }}
+                _focus={{
+                  outline: "none",
+                  boxShadow: "none",
+                  borderBottom: "1px solid #000",
+                }}
+              />
+            </InputGroup>
+
+            {/* Выпадающий список результатов */}
+            {showDropdown && filteredClients.length > 0 && (
+              <List
+                position={"absolute"}
+                top={"100%"}
+                left={0}
+                right={0}
+                bg={"white"}
+                boxShadow={"lg"}
+                borderRadius={"8px"}
+                mt={2}
+                maxH={"300px"}
+                overflowY={"auto"}
+                zIndex={1000}
+                border={"1px solid #e2e8f0"}
               >
-                <SearchIcon />
-              </Button>
-            </InputRightElement>
-          </InputGroup>
+                {filteredClients.map((client) => (
+                  <ListItem
+                    key={client.id}
+                    p={"12px 16px"}
+                    cursor={"pointer"}
+                    _hover={{
+                      bg: "#f7fafc",
+                      color: "#0052b4",
+                    }}
+                    borderBottom={"1px solid #e2e8f0"}
+                    onClick={() => handleClientSelect(client.id)}
+                  >
+                    <Text fontWeight={"600"} fontSize={"14px"}>
+                      ID: {client.id}
+                    </Text>
+                    <Text fontSize={"13px"} color={"gray.600"}>
+                      {getClientDisplayName(client)}
+                    </Text>
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </Box>
+
           <Text>число пациентов: {clientsCount}</Text>
           <Text>
             {time} {weekday.charAt(0).toUpperCase() + weekday.slice(1)}, {year}
@@ -233,13 +330,7 @@ function Header() {
             </Button>
           )}
 
-          {hasAccess([
-            "registration",
-            "accountant",
-            "doctors",
-            "laboratory",
-            "admin",
-          ]) && (
+          {hasAccess(["registration", "accountant", "admin"]) && (
             <Button
               bg={"#fff"}
               color={"#000"}
@@ -257,13 +348,7 @@ function Header() {
             </Button>
           )}
 
-          {hasAccess([
-            "registration",
-            "accountant",
-            "doctors",
-            "laboratory",
-            "admin",
-          ]) && (
+          {hasAccess(["registration", "accountant", "admin"]) && (
             <Button
               bg={"#fff"}
               color={"#000"}

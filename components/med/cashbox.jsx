@@ -628,7 +628,6 @@ function Cashbox() {
           </Tbody>
         </Table>
       </TableContainer>
-
       {filteredRecords.length === 0 && (
         <Box textAlign="center" py={8}>
           <Text color="gray.500">Записи не найдены</Text>

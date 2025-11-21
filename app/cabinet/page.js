@@ -92,7 +92,6 @@ function Cabinet() {
     ready: false,
     method: "",
     notes: "",
-    // 🔥 Добавляем референтные значения
     unit: "",
     referenceMin: null,
     referenceMax: null,
