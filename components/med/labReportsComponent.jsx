@@ -55,7 +55,20 @@ import {
   Download,
   RefreshCw,
 } from "lucide-react";
+
 import { getApiBaseUrl } from "../../utils/api";
+
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+
+pdfMake.fonts = {
+  Roboto: {
+    normal: "Roboto-Regular.ttf",
+    bold: "Roboto-Medium.ttf",
+    italics: "Roboto-Italic.ttf",
+    bolditalics: "Roboto-MediumItalic.ttf",
+  },
+};
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
 
@@ -67,6 +80,18 @@ export default function ReportsPage() {
   const [error, setError] = useState(null);
   const toast = useToast();
   const api = getApiBaseUrl();
+
+  useEffect(() => {
+    (async () => {
+      if (!pdfMake) {
+        const pdfMakeModule = await import("pdfmake/build/pdfmake");
+        const pdfFonts = await import("pdfmake/build/vfs_fonts");
+
+        pdfMake = pdfMakeModule.default;
+        pdfMake.vfs = pdfFonts.default.pdfMake.vfs;
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     loadReportData();
@@ -81,19 +106,15 @@ export default function ReportsPage() {
         `${api}/report/generate?type=${reportType}&period=${period}`
       );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
 
       const data = await response.json();
-      console.log("Report data loaded:", data);
       setReportData(data);
     } catch (err) {
-      console.error("Error loading report:", err);
-      setError(err.message || "Ошибка загрузки отчета");
+      setError(err.message);
       toast({
         title: "Ошибка",
-        description: err.message || "Ошибка загрузки отчета",
+        description: err.message,
         status: "error",
         duration: 5000,
         isClosable: true,
@@ -103,16 +124,232 @@ export default function ReportsPage() {
     }
   };
 
+  // ------------------------------
+  // 🔥🔥🔥 ЭКСПОРТ PDF через pdfMake
+  // ------------------------------
   const handleDownloadPDF = () => {
+    if (!reportData || !reportData.data) {
+      toast({
+        title: "Нет данных",
+        description: "Нет данных для экспорта",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    const titleMap = {
+      general: "Общий отчет клиники",
+      patients: "Отчет по пациентам",
+      cashbox: "Отчет по кассе",
+      laboratory: "Отчет по лаборатории",
+      doctors: "Отчет по врачам",
+    };
+
+    const periodMap = {
+      today: "Сегодня",
+      yesterday: "Вчера",
+      week: "Неделя",
+      month: "Месяц",
+      quarter: "Квартал",
+      year: "Год",
+    };
+
+    // Заголовок PDF
+    const header = [
+      { text: "Медицинская клиника", style: "header" },
+      { text: titleMap[reportType] || "Отчет", style: "subheader" },
+      {
+        columns: [
+          { text: `Период: ${periodMap[period]}`, style: "small" },
+          {
+            text: `Дата: ${new Date().toLocaleDateString("ru-RU")}`,
+            alignment: "right",
+            style: "small",
+          },
+        ],
+      },
+      { text: " ", margin: [0, 0, 0, 8] },
+      {
+        canvas: [{ type: "line", x1: 0, y1: 0, x2: 520, y2: 0, lineWidth: 1 }],
+      },
+      { text: " ", margin: [0, 0, 0, 10] },
+    ];
+
+    // Генерация таблиц под разные отчеты
+    const content = [];
+
+    // -------------------------
+    // ПАЦИЕНТЫ
+    // -------------------------
+    if (reportType === "patients" || reportType === "general") {
+      const d = reportData.data.patients || reportData.data;
+
+      if (d.summary) {
+        content.push({ text: "Основные показатели", style: "section" });
+
+        content.push({
+          table: {
+            widths: ["*", "*"],
+            body: [
+              ["Всего пациентов", d.summary.total],
+              ["Новые за период", d.summary.new],
+              ["С задолженностью", d.summary.withDebt],
+              [
+                "Общая задолженность",
+                `${d.summary.totalDebt.toLocaleString()} UZS`,
+              ],
+            ],
+          },
+          style: "table",
+        });
+      }
+
+      if (d.demographics?.byGender) {
+        content.push({ text: "Распределение по полу", style: "section" });
+
+        content.push({
+          table: {
+            widths: ["*", "*"],
+            body: [
+              ["Пол", "Количество"],
+              ...d.demographics.byGender.map((g) => [g.sex, g.count || 0]),
+            ],
+          },
+          style: "table",
+        });
+      }
+
+      if (d.registrators) {
+        content.push({ text: "ТОП-5 регистраторов", style: "section" });
+
+        content.push({
+          table: {
+            widths: ["*", "*"],
+            body: [
+              ["Регистратор", "Количество"],
+              ...d.registrators
+                .slice(0, 5)
+                .map((r) => [r.registrator, r.count]),
+            ],
+          },
+          style: "table",
+        });
+      }
+    }
+
+    // -------------------------
+    // КАССА
+    // -------------------------
+    if (reportType === "cashbox" || reportType === "general") {
+      const d = reportData.data.cashbox || reportData.data;
+
+      content.push({ text: "Финансовые показатели", style: "section" });
+
+      content.push({
+        table: {
+          widths: ["*", "*"],
+          body: [
+            ["Всего транзакций", d.summary.totalTransactions],
+            ["Общая сумма", `${d.summary.totalAmount.toLocaleString()} UZS`],
+            ["Выручка", `${d.summary.revenue.toLocaleString()} UZS`],
+            ["Скидки", `${d.summary.totalDiscount.toLocaleString()} UZS`],
+            ["Долг", `${d.summary.totalDebt.toLocaleString()} UZS`],
+            ["Средний чек", `${d.summary.averageCheck.toLocaleString()} UZS`],
+          ],
+        },
+        style: "table",
+      });
+    }
+
+    // -------------------------
+    // ЛАБОРАТОРИЯ
+    // -------------------------
+    if (reportType === "laboratory" || reportType === "general") {
+      const d = reportData.data.laboratory || reportData.data;
+
+      content.push({ text: "Показатели лаборатории", style: "section" });
+
+      content.push({
+        table: {
+          widths: ["*", "*"],
+          body: [
+            ["Всего анализов", d.summary.total],
+            ["Завершено", d.summary.completed],
+            ["Процент завершения", `${d.summary.completionRate}%`],
+            ["В работе", d.summary.pending],
+            ["С отклонениями", d.summary.abnormal],
+            ["Процент отклонений", `${d.summary.abnormalRate}%`],
+          ],
+        },
+        style: "table",
+      });
+    }
+
+    // -------------------------
+    // ВРАЧИ
+    // -------------------------
+    if (reportType === "doctors" || reportType === "general") {
+      const d = reportData.data.doctors || reportData.data;
+
+      content.push({ text: "Производительность врачей", style: "section" });
+
+      content.push({
+        table: {
+          widths: ["*", "*", "*"],
+          body: [
+            ["Врач", "Анализов", "С отклонениями"],
+            ...d.doctorPerformance.map((dx) => [
+              dx.executedBy,
+              dx.testsCompleted,
+              dx.abnormalTests,
+            ]),
+          ],
+        },
+        style: "table",
+      });
+    }
+
+    // Итоговый документ pdfMake
+    const docDefinition = {
+      pageSize: "A4",
+      pageMargins: [20, 30, 20, 30],
+      content: [...header, ...content],
+      styles: {
+        header: { fontSize: 18, bold: true, alignment: "center" },
+        subheader: {
+          fontSize: 13,
+          bold: true,
+          alignment: "center",
+          margin: [0, 5, 0, 10],
+        },
+        small: { fontSize: 9 },
+        section: { fontSize: 12, bold: true, margin: [0, 10, 0, 6] },
+        table: { fontSize: 9, margin: [0, 4, 0, 12] },
+      },
+      defaultStyle: {
+        font: "Roboto",
+      },
+    };
+
+    pdfMake
+      .createPdf(docDefinition)
+      .download(
+        `report_${reportType}_${period}_${
+          new Date().toISOString().split("T")[0]
+        }.pdf`
+      );
+
     toast({
-      title: "В разработке",
-      description: "Функция экспорта в PDF скоро будет доступна",
-      status: "info",
+      title: "PDF сформирован",
+      status: "success",
       duration: 3000,
       isClosable: true,
     });
   };
 
+  // Остальной код компонента остается БЕЗ ИЗМЕНЕНИЙ
   if (loading) {
     return (
       <Flex align="center" justify="center" minH="400px" w="100%">
@@ -143,7 +380,6 @@ export default function ReportsPage() {
       </Flex>
     );
   }
-
   return (
     <Box
       maxW="container.xl"
