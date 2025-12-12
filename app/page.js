@@ -111,6 +111,18 @@ function Main() {
           >
             Категории льгот
           </Button>
+          <Button
+            fontWeight={"500"}
+            w={"auto"}
+            h={"auto"}
+            py={"10px"}
+            bg={"white"}
+            shadow={"xl"}
+            borderRadius={"8px"}
+            onClick={() => router.push("/partners")}
+          >
+            Партнеры
+          </Button>
         </Flex>
       </Box>
       <Box

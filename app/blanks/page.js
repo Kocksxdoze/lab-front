@@ -4,7 +4,7 @@ import Header from "../../components/med/header";
 import Footer from "../../components/med/footer";
 import ParticlesComponent from "../../components/med/particles";
 import { Flex, Box } from "@chakra-ui/react";
-import RegisterPage from "../../components/med/registration";
+import Blanks from "../../components/med/blanks";
 
 function BlanksPage() {
   return (
@@ -29,7 +29,7 @@ function BlanksPage() {
             display={"flex"}
             justifyContent={"center"}
           >
-            <RegisterPage />
+            <Blanks />
           </Box>
         </Box>
         <Box pos={"relative"} bottom={"0"} px={"50px"} mt={"50px"} w={"100%"}>

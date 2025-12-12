@@ -431,6 +431,23 @@ function Header() {
               Лаборатория
             </Button>
           )}
+          {hasAccess(["registration", "admin"]) && (
+            <Button
+              bg={"#fff"}
+              color={"#000"}
+              border={"1px solid transparent"}
+              borderRadius={"8px"}
+              fontWeight={"600"}
+              _hover={{
+                color: "#fff",
+                background: "#0052b4",
+                border: "1px solid transparent",
+              }}
+              onClick={() => router.push("/blanks")}
+            >
+              Бланки
+            </Button>
+          )}
 
           {hasAccess(["admin"]) && (
             <Menu>

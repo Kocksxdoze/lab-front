@@ -39,28 +39,42 @@ import {
   CardBody,
   IconButton,
   Grid,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
 } from "@chakra-ui/react";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getApiBaseUrl } from "../../utils/api";
-import { DeleteIcon, SearchIcon } from "@chakra-ui/icons";
+import {
+  DeleteIcon,
+  SearchIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+} from "@chakra-ui/icons";
 
 export default function PatientPage() {
   const { id } = useParams();
   const router = useRouter();
   const [patientData, setPatientData] = useState(null);
   const [labResults, setLabResults] = useState([]);
+  const [blankAssignments, setBlankAssignments] = useState([]);
   const [cashRecords, setCashRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sampleType, setSampleType] = useState("Кровь (сыворотка)");
   const [selectedTests, setSelectedTests] = useState([]);
+  const [selectedBlanks, setSelectedBlanks] = useState([]);
   const toast = useToast();
   const api = getApiBaseUrl();
 
   // Состояния для добавления анализов
   const [isAddAnalysisOpen, setIsAddAnalysisOpen] = useState(false);
   const [labCategories, setLabCategories] = useState([]);
+  const [blanks, setBlanks] = useState([]);
   const [selectedAnalyses, setSelectedAnalyses] = useState([]);
+  const [selectedBlankItems, setSelectedBlankItems] = useState([]);
   const [searchAnalysisTerm, setSearchAnalysisTerm] = useState("");
   const [filteredCategories, setFilteredCategories] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -115,6 +129,29 @@ export default function PatientPage() {
         setLabResults(labs);
       }
 
+      const blankAssignmentsResponse = await fetch(
+        `${api}/blank-assignments/client/${id}`
+      );
+      if (blankAssignmentsResponse.ok) {
+        const assignments = await blankAssignmentsResponse.json();
+        const assignmentsWithDetails = await Promise.all(
+          assignments.map(async (assignment) => {
+            try {
+              const blankResponse = await fetch(
+                `${api}/blank/${assignment.blankId}`
+              );
+              const blank = blankResponse.ok
+                ? await blankResponse.json()
+                : null;
+              return { ...assignment, blank };
+            } catch (err) {
+              return assignment;
+            }
+          })
+        );
+        setBlankAssignments(assignmentsWithDetails);
+      }
+
       const cashResponse = await fetch(`${api}/cashbox/client/${id}`);
       if (cashResponse.ok) {
         const cash = await cashResponse.json();
@@ -136,6 +173,7 @@ export default function PatientPage() {
   const openAddAnalysisModal = async () => {
     setIsAddAnalysisOpen(true);
     await loadLabCategories();
+    await loadBlanks();
   };
 
   const loadLabCategories = async () => {
@@ -150,6 +188,16 @@ export default function PatientPage() {
         description: "Не удалось загрузить список анализов",
         status: "error",
       });
+    }
+  };
+
+  const loadBlanks = async () => {
+    try {
+      const response = await fetch(`${api}/blanks`);
+      const data = await response.json();
+      setBlanks(Array.isArray(data) ? data.filter((b) => b.isActive) : []);
+    } catch (error) {
+      console.error("Ошибка загрузки бланков:", error);
     }
   };
 
@@ -174,7 +222,7 @@ export default function PatientPage() {
     const expandedQuery = expandMedicalTerms(query);
     const terms = expandedQuery.split(/\s+/).filter((term) => term.length > 0);
 
-    const filtered = labCategories.filter((category) => {
+    const filteredLabs = labCategories.filter((category) => {
       const searchText = `
         ${category.name?.toLowerCase() || ""}
         ${category.code?.toLowerCase() || ""}
@@ -184,7 +232,26 @@ export default function PatientPage() {
       return terms.every((term) => searchText.includes(term));
     });
 
-    setFilteredCategories(filtered.slice(0, 8));
+    const filteredBlanksItems = blanks.filter((blank) => {
+      const searchText = `
+        ${blank.name?.toLowerCase() || ""}
+        ${blank.code?.toLowerCase() || ""}
+        ${blank.department?.toLowerCase() || ""}
+        ${blank.category?.toLowerCase() || ""}
+      `;
+      return terms.every((term) => searchText.includes(term));
+    });
+
+    setFilteredCategories(
+      [
+        ...filteredLabs
+          .slice(0, 5)
+          .map((item) => ({ ...item, type: "analysis" })),
+        ...filteredBlanksItems
+          .slice(0, 5)
+          .map((item) => ({ ...item, type: "blank" })),
+      ].slice(0, 8)
+    );
   };
 
   const handleAnalysisSelect = (category) => {
@@ -246,17 +313,66 @@ export default function PatientPage() {
     });
   };
 
+  const handleBlankSelect = (blank) => {
+    if (selectedBlankItems.find((b) => b.id === blank.id)) {
+      toast({
+        title: "Уведомление",
+        description: "Этот бланк уже добавлен",
+        status: "info",
+      });
+      return;
+    }
+
+    setSelectedBlankItems((prev) => [
+      ...prev,
+      {
+        id: blank.id,
+        name: blank.name,
+        price: parseInt(blank.price) || 0,
+        department: blank.department,
+        sampleType: blank.sampleType,
+        content: blank.content,
+      },
+    ]);
+
+    toast({
+      title: "Бланк добавлен",
+      description: `${blank.name}`,
+      status: "success",
+      duration: 1500,
+    });
+  };
+
+  const handleSuggestionClick = (item) => {
+    if (item.type === "analysis") {
+      handleAnalysisSelect(item);
+    } else {
+      handleBlankSelect(item);
+    }
+    setSearchAnalysisTerm("");
+    setFilteredCategories([]);
+  };
+
   const removeAnalysis = (categoryId) => {
     setSelectedAnalyses((prev) =>
       prev.filter((a) => a.categoryId !== categoryId)
     );
   };
 
+  const removeBlank = (blankId) => {
+    setSelectedBlankItems((prev) => prev.filter((b) => b.id !== blankId));
+  };
+
   const calculateTotals = () => {
-    const totalAmount = selectedAnalyses.reduce(
+    const analysisTotal = selectedAnalyses.reduce(
       (sum, a) => sum + (parseInt(a.price) || 0),
       0
     );
+    const blankTotal = selectedBlankItems.reduce(
+      (sum, b) => sum + (parseInt(b.price) || 0),
+      0
+    );
+    const totalAmount = analysisTotal + blankTotal;
     const finalAmount = totalAmount;
     const debtAmount = Math.max(0, finalAmount - paidAmount);
 
@@ -266,10 +382,10 @@ export default function PatientPage() {
   const { totalAmount, finalAmount, debtAmount } = calculateTotals();
 
   const handleAddAnalyses = async () => {
-    if (selectedAnalyses.length === 0) {
+    if (selectedAnalyses.length === 0 && selectedBlankItems.length === 0) {
       toast({
         title: "Ошибка",
-        description: "Выберите анализы для добавления",
+        description: "Выберите анализы или бланки для добавления",
         status: "error",
       });
       return;
@@ -278,66 +394,93 @@ export default function PatientPage() {
     try {
       setLoading(true);
 
-      // Создаем записи анализов
-      const labPromises = selectedAnalyses.flatMap((analysis) => {
-        const tests = analysis.tests || [];
+      // Создаем записи обычных анализов
+      if (selectedAnalyses.length > 0) {
+        const labPromises = selectedAnalyses.flatMap((analysis) => {
+          const tests = analysis.tests || [];
 
-        if (!Array.isArray(tests) || tests.length === 0) {
-          const labData = {
-            clientId: id,
-            categoryId: analysis.categoryId,
-            name: analysis.name,
-            testCode: analysis.code || "",
-            price: analysis.price || 0,
-            sampleType: analysis.sampleType || "Кровь (сыворотка)",
-            unit: null,
-            referenceMin: null,
-            referenceMax: null,
-            referenceText: null,
-            method: null,
-            ready: false,
-            result: null,
-            conclusion: null,
-            isAbnormal: false,
-          };
+          if (!Array.isArray(tests) || tests.length === 0) {
+            const labData = {
+              clientId: id,
+              categoryId: analysis.categoryId,
+              name: analysis.name,
+              testCode: analysis.code || "",
+              price: analysis.price || 0,
+              sampleType: analysis.sampleType || "Кровь (сыворотка)",
+              unit: null,
+              referenceMin: null,
+              referenceMax: null,
+              referenceText: null,
+              method: null,
+              ready: false,
+              result: null,
+              conclusion: null,
+              isAbnormal: false,
+            };
 
-          return fetch(`${api}/lab/new`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(labData),
-          });
-        }
+            return fetch(`${api}/lab/new`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(labData),
+            });
+          }
 
-        return tests.map((test) => {
-          const labData = {
-            clientId: id,
-            categoryId: analysis.categoryId,
-            name: test.name || analysis.name,
-            testCode: test.code || analysis.code || "",
-            price: analysis.price || 0,
-            sampleType: analysis.sampleType || "Кровь (сыворотка)",
-            unit: test.unit || null,
-            referenceMin: test.referenceMin || null,
-            referenceMax: test.referenceMax || null,
-            referenceText: test.referenceText || null,
-            method: test.method || null,
-            ready: false,
-            result: null,
-            conclusion: null,
-            isAbnormal: false,
-          };
+          return tests.map((test) => {
+            const labData = {
+              clientId: id,
+              categoryId: analysis.categoryId,
+              name: test.name || analysis.name,
+              testCode: test.code || analysis.code || "",
+              price: analysis.price || 0,
+              sampleType: analysis.sampleType || "Кровь (сыворотка)",
+              unit: test.unit || null,
+              referenceMin: test.referenceMin || null,
+              referenceMax: test.referenceMax || null,
+              referenceText: test.referenceText || null,
+              method: test.method || null,
+              ready: false,
+              result: null,
+              conclusion: null,
+              isAbnormal: false,
+            };
 
-          return fetch(`${api}/lab/new`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(labData),
+            return fetch(`${api}/lab/new`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(labData),
+            });
           });
         });
-      });
 
-      await Promise.all(labPromises);
+        await Promise.all(labPromises);
+      }
+
+      // Создаем назначения бланков
+      if (selectedBlankItems.length > 0) {
+        const blankPromises = selectedBlankItems.map((blank) => {
+          const assignmentData = {
+            clientId: id,
+            blankId: blank.id,
+            status: "pending",
+            assignedAt: new Date().toISOString(),
+          };
+
+          return fetch(`${api}/blank-assignment/create`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(assignmentData),
+          });
+        });
+
+        await Promise.all(blankPromises);
+      }
 
       // Создаем запись в кассе
+      const servicesDescription = [
+        ...selectedAnalyses.map((a) => a.name),
+        ...selectedBlankItems.map((b) => b.name),
+      ].join(", ");
+
       const cashData = {
         clientId: id,
         registratorId: null,
@@ -348,8 +491,9 @@ export default function PatientPage() {
         paidAmount,
         debtAmount,
         paymentMethod,
-        servicesDescription: selectedAnalyses.map((a) => a.name).join(", "),
+        servicesDescription,
         labAnalyses: selectedAnalyses.map((a) => a.categoryId),
+        blanks: selectedBlankItems.map((b) => b.id),
         status: debtAmount === 0 ? "paid" : paidAmount > 0 ? "partial" : "debt",
         date: new Date().toISOString(),
       };
@@ -367,16 +511,15 @@ export default function PatientPage() {
         duration: 3000,
       });
 
-      // Закрываем модальное окно и обновляем данные
       setIsAddAnalysisOpen(false);
       setSelectedAnalyses([]);
+      setSelectedBlankItems([]);
       setPaidAmount(0);
       setSearchAnalysisTerm("");
 
-      // Обновляем данные пациента
       fetchPatientData();
     } catch (error) {
-      console.error("❌ Ошибка добавления анализов:", error);
+      console.error("❌ Ошибка добавления:", error);
       toast({
         title: "Ошибка",
         description: "Не удалось добавить анализы",
@@ -424,6 +567,14 @@ export default function PatientPage() {
     );
   };
 
+  const handleToggleBlank = (blankId) => {
+    setSelectedBlanks((prev) =>
+      prev.includes(blankId)
+        ? prev.filter((id) => id !== blankId)
+        : [...prev, blankId]
+    );
+  };
+
   const handleSelectAll = () => {
     const readyTests = labResults.filter((lab) => lab.ready);
     if (selectedTests.length === readyTests.length) {
@@ -433,12 +584,24 @@ export default function PatientPage() {
     }
   };
 
+  const handleSelectAllBlanks = () => {
+    const readyBlanks = blankAssignments.filter((b) => b.ready);
+    if (selectedBlanks.length === readyBlanks.length) {
+      setSelectedBlanks([]);
+    } else {
+      setSelectedBlanks(readyBlanks.map((b) => b.id));
+    }
+  };
+
   const handlePrint = () => {
     const selectedResults = labResults.filter((lab) =>
       selectedTests.includes(lab.id)
     );
+    const selectedBlankResults = blankAssignments.filter((blank) =>
+      selectedBlanks.includes(blank.id)
+    );
 
-    if (selectedResults.length === 0) {
+    if (selectedResults.length === 0 && selectedBlankResults.length === 0) {
       toast({
         title: "Не выбраны анализы",
         description: "Выберите хотя бы один готовый анализ для печати",
@@ -447,7 +610,10 @@ export default function PatientPage() {
       return;
     }
 
-    const printContent = generatePrintContent(selectedResults);
+    const printContent = generatePrintContent(
+      selectedResults,
+      selectedBlankResults
+    );
     const printWindow = window.open("", "_blank");
     printWindow.document.write(printContent);
     printWindow.document.close();
@@ -457,13 +623,21 @@ export default function PatientPage() {
     }, 500);
   };
 
-  const generatePrintContent = (results) => {
+  const generatePrintContent = (results, blankResults) => {
     const fio = `${patientData.surname || ""} ${patientData.name || ""} ${
       patientData.lastName || ""
     }`.trim();
     const birthDate = formatDate(patientData.dateBirth);
     const age = calculateAge(patientData.dateBirth);
     const today = new Date().toLocaleDateString("ru-RU");
+
+    // Группируем обычные анализы по отделениям
+    const groupedResults = results.reduce((acc, lab) => {
+      const dept = lab.department || "Общие анализы";
+      if (!acc[dept]) acc[dept] = [];
+      acc[dept].push(lab);
+      return acc;
+    }, {});
 
     return `
 <!DOCTYPE html>
@@ -497,6 +671,7 @@ export default function PatientPage() {
       min-height: 297mm;
       background: white;
       position: relative;
+      page-break-after: always;
     }
     
     .watermark {
@@ -615,6 +790,16 @@ export default function PatientPage() {
       margin-bottom: 20px;
       color: #2B7EC1;
     }
+
+    .department-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: #2B7EC1;
+      margin: 20px 0 10px 0;
+      padding: 5px 10px;
+      background: #F0F0F0;
+      border-left: 4px solid #2B7EC1;
+    }
     
     .results-table {
       width: 100%;
@@ -646,6 +831,21 @@ export default function PatientPage() {
       text-align: center;
       font-weight: bold;
       font-size: 12px;
+    }
+
+    .arrow {
+      display: inline-block;
+      margin-left: 5px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .arrow-up {
+      color: #D32F2F;
+    }
+
+    .arrow-down {
+      color: #1976D2;
     }
     
     .unit {
@@ -736,6 +936,43 @@ export default function PatientPage() {
       font-size: 10px;
       line-height: 1.5;
     }
+
+    .blank-section {
+      margin: 30px 0;
+      page-break-inside: avoid;
+    }
+
+    .blank-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #2B7EC1;
+      margin-bottom: 15px;
+      padding: 8px 10px;
+      background: #F0F0F0;
+      border-left: 4px solid #2B7EC1;
+    }
+
+    .blank-content {
+      margin: 15px 0;
+    }
+
+    .blank-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+    }
+
+    .blank-content table th,
+    .blank-content table td {
+      border: 1px solid #000;
+      padding: 8px;
+      font-size: 10px;
+    }
+
+    .blank-content table th {
+      background: #F0F0F0;
+      font-weight: bold;
+    }
     
     @media print {
       body {
@@ -806,39 +1043,58 @@ export default function PatientPage() {
         </div>
       </div>
       
+      ${
+        results.length > 0
+          ? `
       <div class="results-section">
         <div class="results-title">РЕЗУЛЬТАТЫ ЛАБОРАТОРНЫХ ИССЛЕДОВАНИЙ</div>
         
-        <table class="results-table">
-          <thead>
-            <tr>
-              <th style="width: 30%;">Показатель</th>
-              <th style="width: 15%;">Результат</th>
-              <th style="width: 10%;">Ед. изм.</th>
-              <th style="width: 20%;">Референтные значения</th>
-              <th style="width: 25%;">Метод исследования</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${results
-              .map((lab) => {
-                // Унифицируем отображение референтных значений
-                let referenceDisplay = "—";
+        ${Object.entries(groupedResults)
+          .map(
+            ([department, deptResults]) => `
+          <div class="department-title">${department}</div>
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th style="width: 30%;">Показатель</th>
+                <th style="width: 15%;">Результат</th>
+                <th style="width: 10%;">Ед. изм.</th>
+                <th style="width: 20%;">Референтные значения</th>
+                <th style="width: 25%;">Отделение / Метод</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${deptResults
+                .map((lab) => {
+                  let referenceDisplay = "—";
+                  if (lab.referenceText) {
+                    referenceDisplay = lab.referenceText;
+                  } else if (
+                    lab.referenceMin !== null &&
+                    lab.referenceMax !== null
+                  ) {
+                    referenceDisplay = `${lab.referenceMin} - ${lab.referenceMax}`;
+                  } else if (lab.norma) {
+                    referenceDisplay = lab.norma;
+                  }
 
-                if (lab.referenceText) {
-                  referenceDisplay = lab.referenceText;
-                } else if (
-                  lab.referenceMin !== null &&
-                  lab.referenceMax !== null
-                ) {
-                  referenceDisplay = `${lab.referenceMin} - ${
-                    lab.referenceMax
-                  } ${lab.unit || ""}`;
-                } else if (lab.norma) {
-                  referenceDisplay = lab.norma;
-                }
+                  // Определяем направление стрелки
+                  let arrow = "";
+                  if (lab.result && lab.referenceMin && lab.referenceMax) {
+                    const numResult = parseFloat(lab.result);
+                    const min = parseFloat(lab.referenceMin);
+                    const max = parseFloat(lab.referenceMax);
 
-                return `
+                    if (!isNaN(numResult) && !isNaN(min) && !isNaN(max)) {
+                      if (numResult > max) {
+                        arrow = '<span class="arrow arrow-up">↑</span>';
+                      } else if (numResult < min) {
+                        arrow = '<span class="arrow arrow-down">↓</span>';
+                      }
+                    }
+                  }
+
+                  return `
                     <tr${lab.isAbnormal ? ' class="abnormal"' : ""}>
                       <td class="test-name">
                         ${lab.name}
@@ -851,11 +1107,14 @@ export default function PatientPage() {
                       <td class="result-value${
                         lab.isAbnormal ? " result-abnormal" : ""
                       }">
-                        ${lab.result || "—"}
+                        ${lab.result || "—"}${arrow}
                       </td>
                       <td class="unit">${lab.unit || "—"}</td>
                       <td class="reference">${referenceDisplay}</td>
-                      <td style="font-size: 9px;">${lab.method || "—"}</td>
+                      <td style="font-size: 9px;">
+                        <strong>${lab.department || "—"}</strong>
+                        ${lab.method ? `<br>${lab.method}` : ""}
+                      </td>
                     </tr>
                     ${
                       lab.conclusion
@@ -875,17 +1134,57 @@ export default function PatientPage() {
                         : ""
                     }
                   `;
-              })
-              .join("")}
-          </tbody>
-        </table>
+                })
+                .join("")}
+            </tbody>
+          </table>
+        `
+          )
+          .join("")}
       </div>
-      
-      <div class="barcode">
-        <svg viewBox="0 0 180 50" xmlns="http://www.w3.org/2000/svg">
-          <!-- ... существующий баркод ... -->
-        </svg>
-      </div>
+      `
+          : ""
+      }
+
+      ${
+        blankResults.length > 0
+          ? blankResults
+              .map(
+                (blankAssignment) => `
+        <div class="blank-section">
+          <div class="blank-title">${
+            blankAssignment.blank?.name || "Бланковое исследование"
+          }</div>
+          <div class="blank-content">
+            ${
+              blankAssignment.filledContent ||
+              blankAssignment.blank?.content ||
+              "Содержимое не заполнено"
+            }
+          </div>
+          ${
+            blankAssignment.conclusion
+              ? `
+            <div class="conclusion-section">
+              <div class="conclusion-title">Заключение врача-лаборанта:</div>
+              <div class="conclusion-text">${blankAssignment.conclusion}</div>
+              ${
+                blankAssignment.executedBy
+                  ? `
+                <div class="method-info" style="margin-top: 5px;">Исполнитель: ${blankAssignment.executedBy}</div>
+              `
+                  : ""
+              }
+            </div>
+          `
+              : ""
+          }
+        </div>
+      `
+              )
+              .join("")
+          : ""
+      }
       
       <div class="disclaimer">
         Результаты исследований не являются диагнозом, необходима консультация специалиста.
@@ -914,8 +1213,13 @@ export default function PatientPage() {
   );
 
   const readyTests = labResults.filter((lab) => lab.ready);
+  const readyBlanks = blankAssignments.filter((b) => b.ready);
   const allSelected =
     selectedTests.length === readyTests.length && readyTests.length > 0;
+  const allBlanksSelected =
+    selectedBlanks.length === readyBlanks.length && readyBlanks.length > 0;
+
+  const allSelectedItems = [...selectedAnalyses, ...selectedBlankItems];
 
   return (
     <Box
@@ -1033,152 +1337,301 @@ export default function PatientPage() {
               <Text fontWeight="bold" w="150px">
                 Анализов:
               </Text>
-              <Text>{labResults.length}</Text>
+              <Text>{labResults.length + blankAssignments.length}</Text>
             </HStack>
           </VStack>
         </Box>
       </SimpleGrid>
 
-      {/* Лабораторные результаты */}
-      <Box mb={8}>
-        <Flex justify="space-between" align="center" mb={4}>
-          <Text fontSize="xl" fontWeight="bold">
-            Лабораторные исследования ({labResults.length})
-          </Text>
-          {readyTests.length > 0 && (
-            <HStack>
-              <Text fontSize="sm" color="gray.600">
-                Выбрано: {selectedTests.length} из {readyTests.length}
-              </Text>
-              <Button size="sm" onClick={handleSelectAll} variant="outline">
-                {allSelected ? "Снять все" : "Выбрать все"}
-              </Button>
-            </HStack>
-          )}
-        </Flex>
-        {labResults.length > 0 ? (
-          <TableContainer>
-            <Table variant="striped" size="sm">
-              <Thead bg="gray.100">
-                <Tr>
-                  <Th w="40px">
-                    {readyTests.length > 0 && (
-                      <Checkbox
-                        isChecked={allSelected}
-                        onChange={handleSelectAll}
-                      />
-                    )}
-                  </Th>
-                  <Th>Код</Th>
-                  <Th>Название</Th>
-                  <Th>Результат</Th>
-                  <Th>Ед. изм.</Th>
-                  <Th>Референтные значения</Th>
-                  <Th>Метод</Th>
-                  <Th>Статус</Th>
-                  <Th>Дата</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {labResults.map((lab) => (
-                  <Tr key={lab.id} bg={lab.isAbnormal ? "red.50" : undefined}>
-                    <Td>
-                      {lab.ready && (
-                        <Checkbox
-                          isChecked={selectedTests.includes(lab.id)}
-                          onChange={() => handleToggleTest(lab.id)}
-                        />
-                      )}
-                    </Td>
-                    <Td fontWeight="bold">{lab.testCode || "—"}</Td>
-                    <Td>{lab.name}</Td>
-                    <Td
-                      fontWeight="bold"
-                      color={lab.isAbnormal ? "red.600" : "green.600"}
-                    >
-                      {lab.result || "—"}
-                    </Td>
-                    <Td>{lab.unit || "—"}</Td>
-                    <Td fontSize="xs">
-                      {lab.referenceText ||
-                        (lab.referenceMin !== null && lab.referenceMax !== null
-                          ? `${lab.referenceMin} - ${lab.referenceMax}`
-                          : lab.norma || "—")}
-                    </Td>
-                    <Td fontSize="xs">{lab.method || "—"}</Td>
-                    <Td>
-                      {lab.ready ? (
-                        <Badge colorScheme="green">Готово</Badge>
-                      ) : (
-                        <Badge colorScheme="yellow">В работе</Badge>
-                      )}
-                    </Td>
-                    <Td>{lab.readyDate ? formatDate(lab.readyDate) : "—"}</Td>
-                  </Tr>
-                ))}
-              </Tbody>
-            </Table>
-          </TableContainer>
-        ) : (
-          <Alert status="info">
-            <AlertIcon />
-            Нет лабораторных исследований. Нажмите "Добавить анализы" чтобы
-            назначить исследования.
-          </Alert>
-        )}
-      </Box>
+      {/* Табы для анализов */}
+      <Tabs variant="enclosed" colorScheme="blue">
+        <TabList>
+          <Tab>Обычные анализы ({labResults.length})</Tab>
+          <Tab>Бланковые исследования ({blankAssignments.length})</Tab>
+          <Tab>История платежей ({cashRecords.length})</Tab>
+        </TabList>
 
-      {/* История платежей */}
-      <Box>
-        <Text fontSize="xl" fontWeight="bold" mb={4}>
-          История платежей
-        </Text>
-        {cashRecords.length > 0 ? (
-          <TableContainer>
-            <Table variant="striped" size="sm">
-              <Thead bg="gray.100">
-                <Tr>
-                  <Th>Дата</Th>
-                  <Th>Услуги</Th>
-                  <Th>Сумма</Th>
-                  <Th>Скидка</Th>
-                  <Th>Оплачено</Th>
-                  <Th>Долг</Th>
-                  <Th>Метод</Th>
-                  <Th>Статус</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {cashRecords.map((record) => (
-                  <Tr key={record.id}>
-                    <Td>{formatDate(record.transactionDate)}</Td>
-                    <Td fontSize="xs">{record.servicesDescription}</Td>
-                    <Td>{record.totalAmount?.toLocaleString()} сум</Td>
-                    <Td color="red.500">
-                      {record.discount?.toLocaleString()} сум
-                    </Td>
-                    <Td fontWeight="bold" color="green.600">
-                      {record.paidAmount?.toLocaleString()} сум
-                    </Td>
-                    <Td
-                      fontWeight="bold"
-                      color={record.debtAmount > 0 ? "red.600" : "green.600"}
+        <TabPanels>
+          {/* Обычные анализы */}
+          <TabPanel>
+            <Box>
+              <Flex justify="space-between" align="center" mb={4}>
+                <Text fontSize="xl" fontWeight="bold">
+                  Лабораторные исследования ({labResults.length})
+                </Text>
+                {readyTests.length > 0 && (
+                  <HStack>
+                    <Text fontSize="sm" color="gray.600">
+                      Выбрано: {selectedTests.length} из {readyTests.length}
+                    </Text>
+                    <Button
+                      size="sm"
+                      onClick={handleSelectAll}
+                      variant="outline"
                     >
-                      {record.debtAmount?.toLocaleString()} сум
-                    </Td>
-                    <Td>{record.paymentMethod}</Td>
-                    <Td>{getStatusBadge(record.status)}</Td>
-                  </Tr>
-                ))}
-              </Tbody>
-            </Table>
-          </TableContainer>
-        ) : (
-          <Text color="gray.500" fontStyle="italic">
-            Нет записей об оплате
-          </Text>
-        )}
-      </Box>
+                      {allSelected ? "Снять все" : "Выбрать все"}
+                    </Button>
+                  </HStack>
+                )}
+              </Flex>
+              {labResults.length > 0 ? (
+                <TableContainer>
+                  <Table variant="striped" size="sm">
+                    <Thead bg="gray.100">
+                      <Tr>
+                        <Th w="40px">
+                          {readyTests.length > 0 && (
+                            <Checkbox
+                              isChecked={allSelected}
+                              onChange={handleSelectAll}
+                            />
+                          )}
+                        </Th>
+                        <Th>Код</Th>
+                        <Th>Название</Th>
+                        <Th>Результат</Th>
+                        <Th>Ед. изм.</Th>
+                        <Th>Референтные значения</Th>
+                        <Th>Отделение</Th>
+                        <Th>Статус</Th>
+                        <Th>Дата</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {labResults.map((lab) => (
+                        <Tr
+                          key={lab.id}
+                          bg={lab.isAbnormal ? "red.50" : undefined}
+                        >
+                          <Td>
+                            {lab.ready && (
+                              <Checkbox
+                                isChecked={selectedTests.includes(lab.id)}
+                                onChange={() => handleToggleTest(lab.id)}
+                              />
+                            )}
+                          </Td>
+                          <Td fontWeight="bold">{lab.testCode || "—"}</Td>
+                          <Td>{lab.name}</Td>
+                          <Td
+                            fontWeight="bold"
+                            color={lab.isAbnormal ? "red.600" : "green.600"}
+                          >
+                            {lab.result ? (
+                              <>
+                                {lab.result}
+                                {lab.referenceMin &&
+                                  lab.referenceMax &&
+                                  !isNaN(parseFloat(lab.result)) && (
+                                    <>
+                                      {parseFloat(lab.result) >
+                                        parseFloat(lab.referenceMax) && (
+                                        <ArrowUpIcon ml={1} color="red.500" />
+                                      )}
+                                      {parseFloat(lab.result) <
+                                        parseFloat(lab.referenceMin) && (
+                                        <ArrowDownIcon
+                                          ml={1}
+                                          color="blue.500"
+                                        />
+                                      )}
+                                    </>
+                                  )}
+                              </>
+                            ) : (
+                              "—"
+                            )}
+                          </Td>
+                          <Td>{lab.unit || "—"}</Td>
+                          <Td fontSize="xs">
+                            {lab.referenceText ||
+                              (lab.referenceMin !== null &&
+                              lab.referenceMax !== null
+                                ? `${lab.referenceMin} - ${lab.referenceMax}`
+                                : lab.norma || "—")}
+                          </Td>
+                          <Td>
+                            <Badge colorScheme="purple">
+                              {lab.department || "—"}
+                            </Badge>
+                          </Td>
+                          <Td>
+                            {lab.ready ? (
+                              <Badge colorScheme="green">Готово</Badge>
+                            ) : (
+                              <Badge colorScheme="yellow">В работе</Badge>
+                            )}
+                          </Td>
+                          <Td>
+                            {lab.readyDate ? formatDate(lab.readyDate) : "—"}
+                          </Td>
+                        </Tr>
+                      ))}
+                    </Tbody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <Alert status="info">
+                  <AlertIcon />
+                  Нет лабораторных исследований.
+                </Alert>
+              )}
+            </Box>
+          </TabPanel>
+
+          {/* Бланковые исследования */}
+          <TabPanel>
+            <Box>
+              <Flex justify="space-between" align="center" mb={4}>
+                <Text fontSize="xl" fontWeight="bold">
+                  Бланковые исследования ({blankAssignments.length})
+                </Text>
+                {readyBlanks.length > 0 && (
+                  <HStack>
+                    <Text fontSize="sm" color="gray.600">
+                      Выбрано: {selectedBlanks.length} из {readyBlanks.length}
+                    </Text>
+                    <Button
+                      size="sm"
+                      onClick={handleSelectAllBlanks}
+                      variant="outline"
+                    >
+                      {allBlanksSelected ? "Снять все" : "Выбрать все"}
+                    </Button>
+                  </HStack>
+                )}
+              </Flex>
+              {blankAssignments.length > 0 ? (
+                <TableContainer>
+                  <Table variant="striped" size="sm">
+                    <Thead bg="gray.100">
+                      <Tr>
+                        <Th w="40px">
+                          {readyBlanks.length > 0 && (
+                            <Checkbox
+                              isChecked={allBlanksSelected}
+                              onChange={handleSelectAllBlanks}
+                            />
+                          )}
+                        </Th>
+                        <Th>ID</Th>
+                        <Th>Название</Th>
+                        <Th>Отделение</Th>
+                        <Th>Тип образца</Th>
+                        <Th>Статус</Th>
+                        <Th>Дата</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {blankAssignments.map((assignment) => (
+                        <Tr key={assignment.id}>
+                          <Td>
+                            {assignment.ready && (
+                              <Checkbox
+                                isChecked={selectedBlanks.includes(
+                                  assignment.id
+                                )}
+                                onChange={() =>
+                                  handleToggleBlank(assignment.id)
+                                }
+                              />
+                            )}
+                          </Td>
+                          <Td fontWeight="bold">{assignment.id}</Td>
+                          <Td>{assignment.blank?.name || "—"}</Td>
+                          <Td>
+                            <Badge colorScheme="purple">
+                              {assignment.blank?.department || "—"}
+                            </Badge>
+                          </Td>
+                          <Td fontSize="sm">
+                            {assignment.sampleType ||
+                              assignment.blank?.sampleType ||
+                              "—"}
+                          </Td>
+                          <Td>
+                            {assignment.ready ? (
+                              <Badge colorScheme="green">Готово</Badge>
+                            ) : (
+                              <Badge colorScheme="yellow">В работе</Badge>
+                            )}
+                          </Td>
+                          <Td>
+                            {assignment.readyDate
+                              ? formatDate(assignment.readyDate)
+                              : "—"}
+                          </Td>
+                        </Tr>
+                      ))}
+                    </Tbody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <Alert status="info">
+                  <AlertIcon />
+                  Нет бланковых исследований.
+                </Alert>
+              )}
+            </Box>
+          </TabPanel>
+
+          {/* История платежей */}
+          <TabPanel>
+            <Box>
+              <Text fontSize="xl" fontWeight="bold" mb={4}>
+                История платежей
+              </Text>
+              {cashRecords.length > 0 ? (
+                <TableContainer>
+                  <Table variant="striped" size="sm">
+                    <Thead bg="gray.100">
+                      <Tr>
+                        <Th>Дата</Th>
+                        <Th>Услуги</Th>
+                        <Th>Сумма</Th>
+                        <Th>Скидка</Th>
+                        <Th>Оплачено</Th>
+                        <Th>Долг</Th>
+                        <Th>Метод</Th>
+                        <Th>Статус</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {cashRecords.map((record) => (
+                        <Tr key={record.id}>
+                          <Td>{formatDate(record.transactionDate)}</Td>
+                          <Td fontSize="xs">{record.servicesDescription}</Td>
+                          <Td>{record.totalAmount?.toLocaleString()} сум</Td>
+                          <Td color="red.500">
+                            {record.discount?.toLocaleString()} сум
+                          </Td>
+                          <Td fontWeight="bold" color="green.600">
+                            {record.paidAmount?.toLocaleString()} сум
+                          </Td>
+                          <Td
+                            fontWeight="bold"
+                            color={
+                              record.debtAmount > 0 ? "red.600" : "green.600"
+                            }
+                          >
+                            {record.debtAmount?.toLocaleString()} сум
+                          </Td>
+                          <Td>{record.paymentMethod}</Td>
+                          <Td>{getStatusBadge(record.status)}</Td>
+                        </Tr>
+                      ))}
+                    </Tbody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <Text color="gray.500" fontStyle="italic">
+                  Нет записей об оплате
+                </Text>
+              )}
+            </Box>
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
 
       {/* Модальное окно добавления анализов */}
       <Modal
@@ -1195,16 +1648,15 @@ export default function PatientPage() {
           <ModalCloseButton />
           <ModalBody>
             <VStack align="stretch" spacing={4}>
-              {/* Поиск анализов */}
+              {/* Поиск */}
               <Box>
                 <Input
-                  placeholder="🔍 Поиск анализов по названию, коду или сокращению..."
+                  placeholder="🔍 Поиск анализов и бланков..."
                   value={searchAnalysisTerm}
                   onChange={(e) => handleAnalysisSearch(e.target.value)}
                   size="lg"
                 />
 
-                {/* Быстрые предложения */}
                 {searchAnalysisTerm.length >= 2 &&
                   filteredCategories.length > 0 && (
                     <Box mt={2} p={3} bg="gray.50" borderRadius="md">
@@ -1212,22 +1664,43 @@ export default function PatientPage() {
                         Результаты поиска:
                       </Text>
                       <Grid templateColumns="repeat(2, 1fr)" gap={2}>
-                        {filteredCategories.map((category) => (
+                        {filteredCategories.map((item) => (
                           <Card
-                            key={category.id}
+                            key={`${item.type}-${item.id}`}
                             size="sm"
                             cursor="pointer"
-                            onClick={() => handleAnalysisSelect(category)}
-                            _hover={{ bg: "blue.50" }}
+                            onClick={() => handleSuggestionClick(item)}
+                            _hover={{
+                              bg:
+                                item.type === "analysis"
+                                  ? "blue.50"
+                                  : "purple.50",
+                            }}
+                            borderColor={
+                              item.type === "analysis"
+                                ? "blue.200"
+                                : "purple.200"
+                            }
+                            borderWidth="1px"
                           >
                             <CardBody p={2}>
                               <HStack justify="space-between">
                                 <VStack align="start" spacing={0}>
-                                  <Badge colorScheme="blue" fontSize="xs">
-                                    {category.code}
+                                  <Badge
+                                    colorScheme={
+                                      item.type === "analysis"
+                                        ? "blue"
+                                        : "purple"
+                                    }
+                                    fontSize="xs"
+                                  >
+                                    {item.type === "analysis"
+                                      ? "Анализ"
+                                      : "Бланк"}{" "}
+                                    • {item.code || item.id}
                                   </Badge>
                                   <Text fontSize="sm" fontWeight="medium">
-                                    {category.name}
+                                    {item.name}
                                   </Text>
                                 </VStack>
                                 <Text
@@ -1236,8 +1709,9 @@ export default function PatientPage() {
                                   color="green.600"
                                 >
                                   {(
-                                    category.basePrice ||
-                                    category.sum ||
+                                    item.basePrice ||
+                                    item.price ||
+                                    item.sum ||
                                     0
                                   ).toLocaleString()}{" "}
                                   сум
@@ -1251,27 +1725,28 @@ export default function PatientPage() {
                   )}
               </Box>
 
-              {/* Выбранные анализы */}
-              {selectedAnalyses.length > 0 && (
+              {/* Выбранные элементы */}
+              {allSelectedItems.length > 0 && (
                 <Box>
                   <Text fontWeight="bold" mb={2}>
-                    Выбранные анализы:
+                    Выбрано ({allSelectedItems.length}):
                   </Text>
                   <VStack align="stretch" spacing={2}>
                     {selectedAnalyses.map((analysis) => (
-                      <Card key={analysis.categoryId} variant="outline">
+                      <Card
+                        key={`sel-${analysis.categoryId}`}
+                        variant="outline"
+                        borderColor="blue.200"
+                      >
                         <CardBody>
                           <HStack justify="space-between">
                             <VStack align="start" spacing={1}>
                               <HStack>
-                                <Badge colorScheme="blue">
-                                  {analysis.code}
-                                </Badge>
+                                <Badge colorScheme="blue">Анализ</Badge>
                                 <Text fontWeight="medium">{analysis.name}</Text>
                               </HStack>
                               <Text fontSize="sm" color="gray.600">
-                                🧪 {analysis.sampleType} • ⏱️{" "}
-                                {analysis.executionTime || "24"} ч
+                                🧪 {analysis.sampleType}
                               </Text>
                             </VStack>
                             <HStack>
@@ -1286,7 +1761,42 @@ export default function PatientPage() {
                                 onClick={() =>
                                   removeAnalysis(analysis.categoryId)
                                 }
-                                aria-label="Удалить анализ"
+                                aria-label="Удалить"
+                              />
+                            </HStack>
+                          </HStack>
+                        </CardBody>
+                      </Card>
+                    ))}
+
+                    {selectedBlankItems.map((blank) => (
+                      <Card
+                        key={`sel-blank-${blank.id}`}
+                        variant="outline"
+                        borderColor="purple.200"
+                      >
+                        <CardBody>
+                          <HStack justify="space-between">
+                            <VStack align="start" spacing={1}>
+                              <HStack>
+                                <Badge colorScheme="purple">Бланк</Badge>
+                                <Text fontWeight="medium">{blank.name}</Text>
+                              </HStack>
+                              <Text fontSize="sm" color="gray.600">
+                                🧪 {blank.sampleType}
+                              </Text>
+                            </VStack>
+                            <HStack>
+                              <Text fontWeight="bold" color="green.600">
+                                {blank.price.toLocaleString()} сум
+                              </Text>
+                              <IconButton
+                                icon={<DeleteIcon />}
+                                size="sm"
+                                colorScheme="red"
+                                variant="ghost"
+                                onClick={() => removeBlank(blank.id)}
+                                aria-label="Удалить"
                               />
                             </HStack>
                           </HStack>
@@ -1357,6 +1867,18 @@ export default function PatientPage() {
                     </Text>
                   </Box>
                 </SimpleGrid>
+                <HStack mt={3} spacing={4} fontSize="sm">
+                  <Box>
+                    <Text color="gray.600">
+                      Анализов: {selectedAnalyses.length}
+                    </Text>
+                  </Box>
+                  <Box>
+                    <Text color="gray.600">
+                      Бланков: {selectedBlankItems.length}
+                    </Text>
+                  </Box>
+                </HStack>
               </Box>
             </VStack>
           </ModalBody>
@@ -1371,37 +1893,198 @@ export default function PatientPage() {
             <Button
               colorScheme="blue"
               onClick={handleAddAnalyses}
-              isDisabled={selectedAnalyses.length === 0}
+              isDisabled={allSelectedItems.length === 0}
               isLoading={loading}
             >
-              Добавить анализы ({selectedAnalyses.length})
+              Добавить ({allSelectedItems.length})
             </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
 
-      {/* Модальное окно печати (существующее) */}
-      <Modal isOpen={isPrintModalOpen} onClose={onPrintModalClose} size="md">
+      {/* Модальное окно для выбора анализов для печати */}
+      <Modal isOpen={isPrintModalOpen} onClose={onPrintModalClose} size="3xl">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Печать результатов анализов</ModalHeader>
+          <ModalHeader>Выбор результатов для печати</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            {/* ... существующий код модального окна печати ... */}
+            <VStack align="stretch" spacing={6}>
+              {/* Обычные анализы */}
+              {readyTests.length > 0 && (
+                <Box>
+                  <Flex justify="space-between" align="center" mb={3}>
+                    <Text fontSize="lg" fontWeight="bold" color="blue.700">
+                      Обычные анализы ({readyTests.length})
+                    </Text>
+                    <Button
+                      size="sm"
+                      onClick={handleSelectAll}
+                      variant="outline"
+                    >
+                      {allSelected ? "Снять все" : "Выбрать все"}
+                    </Button>
+                  </Flex>
+                  <VStack align="stretch" spacing={2}>
+                    {readyTests.map((lab) => (
+                      <Card
+                        key={lab.id}
+                        variant="outline"
+                        borderColor={
+                          selectedTests.includes(lab.id)
+                            ? "blue.500"
+                            : "gray.200"
+                        }
+                        bg={
+                          selectedTests.includes(lab.id) ? "blue.50" : "white"
+                        }
+                      >
+                        <CardBody p={3}>
+                          <HStack justify="space-between">
+                            <Checkbox
+                              isChecked={selectedTests.includes(lab.id)}
+                              onChange={() => handleToggleTest(lab.id)}
+                            >
+                              <VStack align="start" spacing={1}>
+                                <Text fontWeight="medium">{lab.name}</Text>
+                                <HStack
+                                  spacing={3}
+                                  fontSize="sm"
+                                  color="gray.600"
+                                >
+                                  <Badge colorScheme="blue">
+                                    {lab.testCode}
+                                  </Badge>
+                                  <Text>
+                                    Результат: {lab.result || "—"}{" "}
+                                    {lab.unit || ""}
+                                  </Text>
+                                  {lab.isAbnormal && (
+                                    <Badge colorScheme="red">Отклонение</Badge>
+                                  )}
+                                </HStack>
+                              </VStack>
+                            </Checkbox>
+                          </HStack>
+                        </CardBody>
+                      </Card>
+                    ))}
+                  </VStack>
+                </Box>
+              )}
+
+              {/* Бланковые исследования */}
+              {readyBlanks.length > 0 && (
+                <Box>
+                  <Flex justify="space-between" align="center" mb={3}>
+                    <Text fontSize="lg" fontWeight="bold" color="purple.700">
+                      Бланковые исследования ({readyBlanks.length})
+                    </Text>
+                    <Button
+                      size="sm"
+                      onClick={handleSelectAllBlanks}
+                      variant="outline"
+                    >
+                      {allBlanksSelected ? "Снять все" : "Выбрать все"}
+                    </Button>
+                  </Flex>
+                  <VStack align="stretch" spacing={2}>
+                    {readyBlanks.map((blank) => (
+                      <Card
+                        key={blank.id}
+                        variant="outline"
+                        borderColor={
+                          selectedBlanks.includes(blank.id)
+                            ? "purple.500"
+                            : "gray.200"
+                        }
+                        bg={
+                          selectedBlanks.includes(blank.id)
+                            ? "purple.50"
+                            : "white"
+                        }
+                      >
+                        <CardBody p={3}>
+                          <HStack justify="space-between">
+                            <Checkbox
+                              isChecked={selectedBlanks.includes(blank.id)}
+                              onChange={() => handleToggleBlank(blank.id)}
+                            >
+                              <VStack align="start" spacing={1}>
+                                <Text fontWeight="medium">
+                                  {blank.blank?.name || "—"}
+                                </Text>
+                                <HStack
+                                  spacing={3}
+                                  fontSize="sm"
+                                  color="gray.600"
+                                >
+                                  <Badge colorScheme="purple">
+                                    {blank.blank?.department || "—"}
+                                  </Badge>
+                                  <Text>
+                                    {blank.sampleType ||
+                                      blank.blank?.sampleType ||
+                                      "—"}
+                                  </Text>
+                                </HStack>
+                              </VStack>
+                            </Checkbox>
+                          </HStack>
+                        </CardBody>
+                      </Card>
+                    ))}
+                  </VStack>
+                </Box>
+              )}
+
+              {readyTests.length === 0 && readyBlanks.length === 0 && (
+                <Alert status="info">
+                  <AlertIcon />
+                  <AlertDescription>
+                    Нет готовых результатов для печати. Дождитесь завершения
+                    анализов.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Информация о выборе */}
+              {(selectedTests.length > 0 || selectedBlanks.length > 0) && (
+                <Box p={4} bg="gray.50" borderRadius="md">
+                  <Text fontWeight="bold" mb={2}>
+                    Выбрано для печати:
+                  </Text>
+                  <HStack spacing={4}>
+                    {selectedTests.length > 0 && (
+                      <Badge colorScheme="blue" fontSize="md" px={3} py={1}>
+                        Анализов: {selectedTests.length}
+                      </Badge>
+                    )}
+                    {selectedBlanks.length > 0 && (
+                      <Badge colorScheme="purple" fontSize="md" px={3} py={1}>
+                        Бланков: {selectedBlanks.length}
+                      </Badge>
+                    )}
+                  </HStack>
+                </Box>
+              )}
+            </VStack>
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onPrintModalClose}>
               Отмена
             </Button>
             <Button
-              colorScheme="green"
+              colorScheme="teal"
               onClick={() => {
                 handlePrint();
                 onPrintModalClose();
               }}
-              isDisabled={selectedTests.length === 0}
+              isDisabled={
+                selectedTests.length === 0 && selectedBlanks.length === 0
+              }
             >
-              Печать ({selectedTests.length})
+              Печать ({selectedTests.length + selectedBlanks.length})
             </Button>
           </ModalFooter>
         </ModalContent>

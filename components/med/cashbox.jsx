@@ -205,10 +205,10 @@ function Cashbox() {
 
   const getStatusBadge = (status) => {
     const statusMap = {
-      paid: { label: "Оплачено", color: "green" },
-      partial: { label: "Частично", color: "yellow" },
+      paid: { label: "Оплач", color: "green" },
+      partial: { label: "Част", color: "yellow" },
       debt: { label: "Долг", color: "red" },
-      cancelled: { label: "Отменено", color: "gray" },
+      cancelled: { label: "Отм", color: "gray" },
     };
     const s = statusMap[status] || { label: status, color: "gray" };
     return <Badge colorScheme={s.color}>{s.label}</Badge>;
@@ -553,22 +553,19 @@ function Cashbox() {
               <Th>Телефон</Th>
               <Th>Услуги</Th>
               <Th>Сумма</Th>
-              <Th>Скидка</Th>
               <Th>Итого</Th>
               <Th>Оплачено</Th>
               <Th>Долг</Th>
+              <Th>Действия</Th>
               <Th>Оплата</Th>
               <Th>Статус</Th>
-              <Th>Действия</Th>
             </Tr>
           </Thead>
           <Tbody>
             {filteredRecords.map((record) => (
               <Tr key={record.id} _hover={{ bg: "gray.50" }}>
                 <Td fontWeight="medium">{record.id}</Td>
-                <Td fontSize="xs">
-                  {formatDateForTable(record.transactionDate)}
-                </Td>
+                <Td fontSize="xs">{formatDateForTable(record.createdAt)}</Td>
                 <Td>{getClientName(record.clientId)}</Td>
                 <Td>{getClientPhone(record.clientId)}</Td>
                 <Td fontSize="xs" maxW="200px" isTruncated>
@@ -592,10 +589,6 @@ function Cashbox() {
                 >
                   {record.debtAmount?.toLocaleString()} сум
                 </Td>
-                <Td fontSize="xs">
-                  {getPaymentMethodLabel(record.paymentMethod)}
-                </Td>
-                <Td>{getStatusBadge(record.status)}</Td>
                 <Td>
                   <HStack spacing={2}>
                     <Button
@@ -618,11 +611,15 @@ function Cashbox() {
                           onPaymentOpen();
                         }}
                       >
-                        Оплатить
+                        Внести
                       </Button>
                     )}
                   </HStack>
                 </Td>
+                <Td fontSize="xs">
+                  {getPaymentMethodLabel(record.paymentMethod)}
+                </Td>
+                <Td>{getStatusBadge(record.status)}</Td>
               </Tr>
             ))}
           </Tbody>

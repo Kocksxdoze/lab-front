@@ -4,9 +4,9 @@ import Header from "../../components/med/header";
 import Footer from "../../components/med/footer";
 import ParticlesComponent from "../../components/med/particles";
 import { Flex, Box } from "@chakra-ui/react";
-import RegisterPage from "../../components/med/registration";
+import Partners from "../../components/med/partners";
 
-function BlanksPage() {
+function PartnersPage() {
   return (
     <>
       <Flex flexDir={"column"} pos={"absolute"} w={"100%"}>
@@ -29,7 +29,7 @@ function BlanksPage() {
             display={"flex"}
             justifyContent={"center"}
           >
-            <RegisterPage />
+            <Partners />
           </Box>
         </Box>
         <Box pos={"relative"} bottom={"0"} px={"50px"} mt={"50px"} w={"100%"}>
@@ -40,4 +40,4 @@ function BlanksPage() {
   );
 }
 
-export default BlanksPage;
+export default PartnersPage;

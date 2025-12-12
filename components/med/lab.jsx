@@ -38,13 +38,7 @@ import {
   Text,
   SimpleGrid,
 } from "@chakra-ui/react";
-import {
-  SearchIcon,
-  AddIcon,
-  EditIcon,
-  DeleteIcon,
-  InfoIcon,
-} from "@chakra-ui/icons";
+import { SearchIcon, AddIcon, EditIcon, DeleteIcon } from "@chakra-ui/icons";
 import axios from "axios";
 import { getApiBaseUrl } from "../../utils/api";
 
@@ -56,16 +50,17 @@ function Lab() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
-    code: "",
     name: "",
     shortName: "",
     description: "",
     department: "",
     basePrice: 0,
-    executionTime: 24,
     sampleType: "Кровь (сыворотка)",
     sampleVolume: "",
-    preparation: "",
+    normalRange: "",
+    referenceValue: "",
+    unit: "",
+    nomenclature: "",
     tests: [],
     isActive: true,
     orderIndex: 0,
@@ -94,12 +89,14 @@ function Lab() {
   const filteredCategories = categories.filter((cat) =>
     [
       cat?.id,
-      cat?.code,
       cat?.name,
       cat?.shortName,
       cat?.department,
       cat?.basePrice,
       cat?.sampleType,
+      cat?.normalRange,
+      cat?.referenceValue,
+      cat?.unit,
     ].some((field) =>
       field?.toString().toLowerCase().includes(search.toLowerCase())
     )
@@ -108,10 +105,10 @@ function Lab() {
   const handleCreateOrUpdate = async () => {
     try {
       // Валидация
-      if (!formData.code || !formData.name) {
+      if (!formData.name) {
         toast({
           title: "Ошибка",
-          description: "Заполните обязательные поля: Код и Название",
+          description: "Заполните обязательное поле: Название",
           status: "warning",
         });
         return;
@@ -121,7 +118,6 @@ function Lab() {
       const dataToSend = {
         ...formData,
         basePrice: parseInt(formData.basePrice) || 0,
-        executionTime: parseInt(formData.executionTime) || null,
         orderIndex: parseInt(formData.orderIndex) || 0,
         tests:
           Array.isArray(formData.tests) && formData.tests.length > 0
@@ -198,16 +194,17 @@ function Lab() {
     }
 
     setFormData({
-      code: category.code || "",
       name: category.name || "",
       shortName: category.shortName || "",
       description: category.description || "",
       department: category.department || "",
       basePrice: category.basePrice || 0,
-      executionTime: category.executionTime || 24,
       sampleType: category.sampleType || "Кровь (сыворотка)",
       sampleVolume: category.sampleVolume || "",
-      preparation: category.preparation || "",
+      normalRange: category.normalRange || "",
+      referenceValue: category.referenceValue || "",
+      unit: category.unit || "",
+      nomenclature: category.nomenclature || "",
       tests: tests,
       isActive: category.isActive !== false,
       orderIndex: category.orderIndex || 0,
@@ -220,16 +217,17 @@ function Lab() {
     setIsEditing(false);
     setEditingId(null);
     setFormData({
-      code: "",
       name: "",
       shortName: "",
       description: "",
       department: "",
       basePrice: 0,
-      executionTime: 24,
       sampleType: "Кровь (сыворотка)",
       sampleVolume: "",
-      preparation: "",
+      normalRange: "",
+      referenceValue: "",
+      unit: "",
+      nomenclature: "",
       tests: [],
       isActive: true,
       orderIndex: 0,
@@ -262,12 +260,13 @@ function Lab() {
         <Table variant="striped" size="sm" width="100%">
           <Thead position="sticky" top={0} zIndex={1} bg="white">
             <Tr>
-              <Th>Код</Th>
               <Th>Название</Th>
               <Th>Отделение</Th>
               <Th>Цена</Th>
               <Th>Биоматериал</Th>
-              <Th>Время (ч)</Th>
+              <Th>Норма</Th>
+              <Th>Реф. норма</Th>
+              <Th>Ед. изм.</Th>
               <Th>Параметров</Th>
               <Th>Статус</Th>
               <Th>Действия</Th>
@@ -290,10 +289,16 @@ function Lab() {
 
               return (
                 <Tr key={cat.id}>
-                  <Td>
-                    <Badge colorScheme="blue">{cat.code}</Badge>
+                  <Td fontWeight="medium">
+                    <Box>
+                      <Text fontWeight="bold">{cat.name}</Text>
+                      {cat.shortName && (
+                        <Text fontSize="sm" color="gray.600">
+                          {cat.shortName}
+                        </Text>
+                      )}
+                    </Box>
                   </Td>
-                  <Td fontWeight="medium">{cat.name}</Td>
                   <Td>
                     {cat.department ? (
                       <Badge colorScheme="purple">{cat.department}</Badge>
@@ -304,8 +309,31 @@ function Lab() {
                   <Td fontWeight="bold" color="green.600">
                     {(cat.basePrice || 0).toLocaleString()} сум
                   </Td>
-                  <Td fontSize="sm">{cat.sampleType || "—"}</Td>
-                  <Td>{cat.executionTime || "—"}</Td>
+                  <Td fontSize="sm">
+                    <Box>
+                      <Text>{cat.sampleType || "—"}</Text>
+                      {cat.sampleVolume && (
+                        <Text fontSize="xs" color="gray.500">
+                          {cat.sampleVolume}
+                        </Text>
+                      )}
+                    </Box>
+                  </Td>
+                  <Td>
+                    {cat.normalRange ? (
+                      <Badge colorScheme="green">{cat.normalRange}</Badge>
+                    ) : (
+                      "—"
+                    )}
+                  </Td>
+                  <Td>
+                    {cat.referenceValue ? (
+                      <Badge colorScheme="blue">{cat.referenceValue}</Badge>
+                    ) : (
+                      "—"
+                    )}
+                  </Td>
+                  <Td>{cat.unit || "—"}</Td>
                   <Td>
                     <Badge colorScheme={testsCount > 0 ? "green" : "gray"}>
                       {testsCount}
@@ -366,17 +394,6 @@ function Lab() {
               {/* Основная информация */}
               <SimpleGrid columns={2} spacing={4}>
                 <FormControl isRequired>
-                  <FormLabel>Код категории</FormLabel>
-                  <Input
-                    value={formData.code}
-                    onChange={(e) =>
-                      setFormData({ ...formData, code: e.target.value })
-                    }
-                    placeholder="Например: CBC, BIOCHEM"
-                  />
-                </FormControl>
-
-                <FormControl isRequired>
                   <FormLabel>Полное название</FormLabel>
                   <Input
                     value={formData.name}
@@ -413,14 +430,38 @@ function Lab() {
                     <option value="Биохимическая лаборатория">
                       Биохимическая лаборатория
                     </option>
+                    <option value="Бактериологическая лаборатория">
+                      Бактериологические исследования
+                    </option>
                     <option value="Гормональная лаборатория">
                       Гормональная лаборатория
                     </option>
                     <option value="Микробиологическая лаборатория">
                       Микробиологическая лаборатория
                     </option>
+                    <option value="Каулограмма">Каулограмма</option>
                     <option value="ПЦР лаборатория">ПЦР лаборатория</option>
+                    <option value="Иммунохроматографический анализ">
+                      Иммунохроматографический анализ
+                    </option>
+                    <option value="Иммуноферментный анализ">
+                      Иммуноферментный анализ (ИФА)
+                    </option>
+                    <option value="Иммунохемилюминисцентный анализ">
+                      Иммунохемилюминисцентный анализ (ИХЛА)
+                    </option>
                   </Select>
+                </FormControl>
+
+                <FormControl>
+                  <FormLabel>Номенклатура</FormLabel>
+                  <Input
+                    value={formData.nomenclature}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nomenclature: e.target.value })
+                    }
+                    placeholder="Код по номенклатуре"
+                  />
                 </FormControl>
               </SimpleGrid>
 
@@ -438,8 +479,8 @@ function Lab() {
 
               <Divider />
 
-              {/* Параметры */}
-              <SimpleGrid columns={3} spacing={4}>
+              {/* Цена и сортировка */}
+              <SimpleGrid columns={2} spacing={4}>
                 <FormControl isRequired>
                   <FormLabel>Базовая цена (сум)</FormLabel>
                   <NumberInput
@@ -451,22 +492,6 @@ function Lab() {
                       })
                     }
                     min={0}
-                  >
-                    <NumberInputField />
-                  </NumberInput>
-                </FormControl>
-
-                <FormControl>
-                  <FormLabel>Время выполнения (ч)</FormLabel>
-                  <NumberInput
-                    value={formData.executionTime}
-                    onChange={(valueString) =>
-                      setFormData({
-                        ...formData,
-                        executionTime: parseInt(valueString) || null,
-                      })
-                    }
-                    min={1}
                   >
                     <NumberInputField />
                   </NumberInput>
@@ -507,6 +532,15 @@ function Lab() {
                     <option value="Кал">Кал</option>
                     <option value="Мазок">Мазок</option>
                     <option value="Слюна">Слюна</option>
+                    <option value="Спинномозговая жидкость">
+                      Спинномозговая жидкость
+                    </option>
+                    <option value="Синовиальная жидкость">
+                      Синовиальная жидкость
+                    </option>
+                    <option value="Плевральная жидкость">
+                      Плевральная жидкость
+                    </option>
                   </Select>
                 </FormControl>
 
@@ -522,17 +556,53 @@ function Lab() {
                 </FormControl>
               </SimpleGrid>
 
-              <FormControl>
-                <FormLabel>Подготовка к анализу</FormLabel>
-                <Textarea
-                  value={formData.preparation}
-                  onChange={(e) =>
-                    setFormData({ ...formData, preparation: e.target.value })
-                  }
-                  placeholder="Правила подготовки пациента к анализу"
-                  rows={3}
-                />
-              </FormControl>
+              <Divider />
+
+              {/* Поля нормы и единиц измерения */}
+              <SimpleGrid columns={3} spacing={4}>
+                <FormControl>
+                  <FormLabel>Диапазон нормы</FormLabel>
+                  <Input
+                    value={formData.normalRange}
+                    onChange={(e) =>
+                      setFormData({ ...formData, normalRange: e.target.value })
+                    }
+                    placeholder="Например: 120-150"
+                  />
+                </FormControl>
+
+                <FormControl>
+                  <FormLabel>Референтная норма</FormLabel>
+                  <Select
+                    value={formData.referenceValue}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        referenceValue: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Не указано</option>
+                    <option value="Отрицательно">Отрицательно</option>
+                    <option value="Положительно">Положительно</option>
+                    <option value="Норма">Норма</option>
+                    <option value="Выше нормы">Выше нормы</option>
+                    <option value="Ниже нормы">Ниже нормы</option>
+                    <option value="Пограничный">Пограничный</option>
+                  </Select>
+                </FormControl>
+
+                <FormControl>
+                  <FormLabel>Единица измерения</FormLabel>
+                  <Input
+                    value={formData.unit}
+                    onChange={(e) =>
+                      setFormData({ ...formData, unit: e.target.value })
+                    }
+                    placeholder="Например: г/л, ммоль/л, МЕ/л"
+                  />
+                </FormControl>
+              </SimpleGrid>
 
               <Divider />
 
