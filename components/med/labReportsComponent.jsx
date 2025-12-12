@@ -81,14 +81,25 @@ export default function ReportsPage() {
   const toast = useToast();
   const api = getApiBaseUrl();
 
+  let pdfMakeInstance = null;
+
   useEffect(() => {
     (async () => {
-      if (!pdfMake) {
+      if (!pdfMakeInstance) {
         const pdfMakeModule = await import("pdfmake/build/pdfmake");
-        const pdfFonts = await import("pdfmake/build/vfs_fonts");
+        const pdfFontsModule = await import("pdfmake/build/vfs_fonts");
 
-        pdfMake = pdfMakeModule.default;
-        pdfMake.vfs = pdfFonts.default.pdfMake.vfs;
+        pdfMakeInstance = pdfMakeModule.default;
+        pdfMakeInstance.vfs = pdfFontsModule.default.pdfMake.vfs;
+
+        pdfMakeInstance.fonts = {
+          Roboto: {
+            normal: "Roboto-Regular.ttf",
+            bold: "Roboto-Medium.ttf",
+            italics: "Roboto-Italic.ttf",
+            bolditalics: "Roboto-MediumItalic.ttf",
+          },
+        };
       }
     })();
   }, []);
