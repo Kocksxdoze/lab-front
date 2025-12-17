@@ -658,6 +658,7 @@ function RegisterPage() {
                 <FormControl isRequired>
                   <FormLabel>Фамилия</FormLabel>
                   <Input
+                    textTransform={"capitalize"}
                     name="surname"
                     onChange={change}
                     placeholder="Иванов"
@@ -666,12 +667,18 @@ function RegisterPage() {
 
                 <FormControl isRequired>
                   <FormLabel>Имя</FormLabel>
-                  <Input name="name" onChange={change} placeholder="Иван" />
+                  <Input
+                    textTransform={"capitalize"}
+                    name="name"
+                    onChange={change}
+                    placeholder="Иван"
+                  />
                 </FormControl>
 
                 <FormControl>
                   <FormLabel>Отчество</FormLabel>
                   <Input
+                    textTransform={"capitalize"}
                     name="lastName"
                     onChange={change}
                     placeholder="Иванович"
@@ -718,7 +725,11 @@ function RegisterPage() {
               <VStack align="stretch" spacing={4}>
                 <FormControl>
                   <FormLabel>Адрес</FormLabel>
-                  <Input name="addres" onChange={change} />
+                  <Input
+                    textTransform={"capitalize"}
+                    name="addres"
+                    onChange={change}
+                  />
                 </FormControl>
 
                 <FormControl>

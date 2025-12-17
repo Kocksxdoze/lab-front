@@ -616,14 +616,14 @@ function Cabinet() {
         flex="1"
         position="relative"
         zIndex={5}
-        px="50px"
+        px={{ base: "10px", md: "20px", lg: "50px" }}
         py={8}
         display="flex"
         justifyContent="center"
         alignItems="flex-start"
         minH="calc(100vh - 160px)"
       >
-        <Box w="full" maxW="1400px">
+        <Box w="full" maxW="100%">
           {/* Заголовок и профиль */}
           <Card
             mb={8}
@@ -633,11 +633,15 @@ function Cabinet() {
             overflow="hidden"
           >
             <CardBody p={0}>
-              <Grid templateColumns={{ base: "1fr", lg: "300px 1fr" }} gap={0}>
+              <Grid
+                templateColumns={{ base: "1fr", lg: "300px 1fr" }}
+                gap={0}
+                overflow="hidden"
+              >
                 {/* Боковая панель профиля */}
                 <Box
                   bg="blue.50"
-                  p={6}
+                  p={{ base: 3, md: 4, lg: 6 }}
                   borderRight="1px solid"
                   borderColor="blue.100"
                 >
@@ -693,8 +697,13 @@ function Cabinet() {
 
                 {/* Основной контент */}
                 <Box p={6}>
-                  <Flex justify="space-between" align="center" mb={6}>
-                    <VStack align="start" spacing={1}>
+                  <Flex
+                    justify="space-between"
+                    align="center"
+                    mb={6}
+                    w={"100%"}
+                  >
+                    <VStack align="start" spacing={1} w={"100%"}>
                       <Text fontSize="3xl" fontWeight="bold" color="blue.700">
                         Лабораторный кабинет
                       </Text>
@@ -889,7 +898,7 @@ function Cabinet() {
                     <TabPanels>
                       {/* Вкладка обычных анализов */}
                       <TabPanel p={0}>
-                        <Card shadow="sm">
+                        <Card shadow="xs">
                           <CardHeader>
                             <Flex justify="space-between" align="center">
                               <Text fontSize="xl" fontWeight="bold">
@@ -907,27 +916,26 @@ function Cabinet() {
                               </Flex>
                             ) : filteredLabTests.length > 0 ? (
                               <Box
-                                overflowX="auto"
-                                maxH="500px"
-                                overflowY="auto"
+                                overflowX="scroll" // Добавлен горизонтальный скролл
+                                overflowY="auto" // Вертикальный скролл
+                                maxH="600px" // Ограничение высоты
+                                width="100%"
                               >
-                                <Table variant="simple" size="md">
-                                  <Thead
-                                    bg="blue.50"
-                                    position="sticky"
-                                    top={0}
-                                    zIndex={1}
-                                  >
+                                <Table
+                                  variant="simple"
+                                  width={"100%"}
+                                  size="xs"
+                                >
+                                  <Thead bg="blue.50" position="sticky">
                                     <Tr>
                                       <Th>ID</Th>
                                       <Th>Пациент</Th>
                                       <Th>Анализ</Th>
-                                      <Th>Категория</Th>
                                       <Th>Результат</Th>
                                       <Th>Норма</Th>
                                       <Th>Статус</Th>
-                                      <Th>Дата</Th>
                                       <Th>Действия</Th>
+                                      <Th>Дата</Th>
                                     </Tr>
                                   </Thead>
                                   <Tbody>
@@ -960,19 +968,14 @@ function Cabinet() {
                                               {test.testCode}
                                             </Badge>
                                             <Text
-                                              fontSize="sm"
+                                              fontSize="xs"
                                               fontWeight="medium"
                                             >
                                               {test.name}
                                             </Text>
                                           </VStack>
                                         </Td>
-                                        <Td>
-                                          <Text fontSize="sm">
-                                            {test.category?.name ||
-                                              "Не указана"}
-                                          </Text>
-                                        </Td>
+
                                         <Td>
                                           {test.result ? (
                                             <Text
@@ -989,7 +992,7 @@ function Cabinet() {
                                             <Text color="gray.400">—</Text>
                                           )}
                                         </Td>
-                                        <Td fontSize="sm">
+                                        <Td fontSize="xs">
                                           <Tooltip
                                             label="Из категории"
                                             placement="top"
@@ -1022,15 +1025,11 @@ function Cabinet() {
                                             </Badge>
                                           )}
                                         </Td>
-                                        <Td fontSize="sm">
-                                          {new Date(
-                                            test.createdAt
-                                          ).toLocaleDateString("ru-RU")}
-                                        </Td>
+
                                         <Td>
                                           <HStack spacing={2}>
                                             <Button
-                                              size="sm"
+                                              size="xs"
                                               colorScheme="blue"
                                               onClick={() =>
                                                 handleOpenTest(test)
@@ -1048,6 +1047,11 @@ function Cabinet() {
                                                 : "Заполнить"}
                                             </Button>
                                           </HStack>
+                                        </Td>
+                                        <Td fontSize="xs">
+                                          {new Date(
+                                            test.createdAt
+                                          ).toLocaleDateString("ru-RU")}
                                         </Td>
                                       </Tr>
                                     ))}
@@ -1074,7 +1078,7 @@ function Cabinet() {
 
                       {/* Вкладка табличных бланков */}
                       <TabPanel p={0}>
-                        <Card shadow="sm">
+                        <Card shadow="xs">
                           <CardHeader>
                             <Flex justify="space-between" align="center">
                               <Text fontSize="xl" fontWeight="bold">
@@ -1094,10 +1098,10 @@ function Cabinet() {
                             ) : filteredBlankAssignments.length > 0 ? (
                               <Box
                                 overflowX="auto"
-                                maxH="500px"
+                                width={"100%"}
                                 overflowY="auto"
                               >
-                                <Table variant="simple" size="md">
+                                <Table variant="simple" size="xs">
                                   <Thead
                                     bg="purple.50"
                                     position="sticky"
@@ -1112,7 +1116,7 @@ function Cabinet() {
                                       <Th>Тип образца</Th>
                                       <Th>Статус</Th>
                                       <Th>Дата назначения</Th>
-                                      <Th>Действия</Th>
+                                      <Th minW="180px">Действия</Th>
                                     </Tr>
                                   </Thead>
                                   <Tbody>
@@ -1159,7 +1163,7 @@ function Cabinet() {
                                                 "—"}
                                             </Badge>
                                           </Td>
-                                          <Td fontSize="sm">
+                                          <Td fontSize="xs">
                                             {assignment.sampleType ||
                                               assignment.blank?.sampleType ||
                                               "—"}
@@ -1183,7 +1187,7 @@ function Cabinet() {
                                               </Badge>
                                             )}
                                           </Td>
-                                          <Td fontSize="sm">
+                                          <Td fontSize="xs">
                                             {new Date(
                                               assignment.createdAt
                                             ).toLocaleDateString("ru-RU")}
@@ -1191,7 +1195,8 @@ function Cabinet() {
                                           <Td>
                                             <HStack spacing={2}>
                                               <Button
-                                                size="sm"
+                                                minW="96px"
+                                                size="xs"
                                                 colorScheme="purple"
                                                 onClick={() =>
                                                   handleOpenBlank(assignment)
@@ -1202,6 +1207,7 @@ function Cabinet() {
                                                 Заполнить
                                               </Button>
                                               <Button
+                                                minW="96px"
                                                 size="sm"
                                                 variant="outline"
                                                 onClick={() =>
