@@ -893,10 +893,16 @@ export default function PatientPage() {
     .barcode {
       text-align: right;
       margin-top: 20px;
+      margin-bottom: 15px;
+    }
+
+    .barcode img {
+      height: 40px;
+      width: auto;
     }
     
     .disclaimer {
-      margin-top: 30px;
+      margin-top: 15px;
       text-align: center;
       font-size: 9px;
       color: #FF9800;
@@ -1037,10 +1043,6 @@ export default function PatientPage() {
           <div class="info-label">Дата выдачи:</div>
           <div class="info-value">${today}</div>
         </div>
-        <div class="info-row">
-          <div class="info-label">Тип биоматериала:</div>
-          <div class="info-value">${sampleType}</div>
-        </div>
       </div>
       
       ${
@@ -1060,7 +1062,7 @@ export default function PatientPage() {
                 <th style="width: 15%;">Результат</th>
                 <th style="width: 10%;">Ед. изм.</th>
                 <th style="width: 20%;">Референтные значения</th>
-                <th style="width: 25%;">Отделение / Метод</th>
+                <th style="width: 25%;">Метод</th>
               </tr>
             </thead>
             <tbody>
@@ -1185,6 +1187,10 @@ export default function PatientPage() {
               .join("")
           : ""
       }
+      
+      <div class="barcode">
+        <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjUwIiBoZWlnaHQ9IjUwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iNCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSI4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEzIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE2IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjIwIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjI0IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjI5IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjMyIiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjM2IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQwIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQ1IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQ4IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjUyIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjU2IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjYxIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjY0IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjY4IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjcyIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijc3IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjgwIiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijg0IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijg4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjkzIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijk2IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEwMCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMDQiIHk9IjAiIHdpZHRoPSIzIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTA5IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjExMiIgeT0iMCIgd2lkdGg9IjIiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMTYiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTIwIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEyNSIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMjgiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTMyIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEzNiIgeT0iMCIgd2lkdGg9IjMiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNDEiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTQ0IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE0OCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNTIiIHk9IjAiIHdpZHRoPSIzIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTU3IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE2MCIgeT0iMCIgd2lkdGg9IjIiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNjQiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTY4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE3MyIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNzYiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTgwIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE4NCIgeT0iMCIgd2lkdGg9IjMiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxODkiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTkyIiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjx0ZXh0IHg9IjEyNSIgeT0iNDgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSI4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj4yNDE2MjAyNC01MTAwMTkyNS0yMDI0MTIwPC90ZXh0Pjwvc3ZnPg==" alt="Barcode">
+      </div>
       
       <div class="disclaimer">
         Результаты исследований не являются диагнозом, необходима консультация специалиста.
