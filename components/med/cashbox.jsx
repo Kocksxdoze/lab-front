@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
   Input,
@@ -31,9 +31,31 @@ import {
   VStack,
   SimpleGrid,
   Divider,
+  IconButton,
+  Flex,
+  Grid,
+  GridItem,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
 } from "@chakra-ui/react";
 import { SearchIcon, DownloadIcon } from "@chakra-ui/icons";
 import { getApiBaseUrl } from "../../utils/api";
+
+const PrinterIcon = (props) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    {...props}
+  >
+    <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z" />
+  </svg>
+);
 
 function Cashbox() {
   const [cashRecords, setCashRecords] = useState([]);
@@ -44,14 +66,10 @@ function Cashbox() {
   const [filterPeriod, setFilterPeriod] = useState("all");
   const [loading, setLoading] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [receiptOperationId, setReceiptOperationId] = useState("");
   const toast = useToast();
   const api = getApiBaseUrl();
 
-  const {
-    isOpen: isReceiptOpen,
-    onOpen: onReceiptOpen,
-    onClose: onReceiptClose,
-  } = useDisclosure();
   const {
     isOpen: isPaymentOpen,
     onOpen: onPaymentOpen,
@@ -67,34 +85,26 @@ function Cashbox() {
     loadCashRecords();
   }, []);
 
-  // Функция для правильного парсинга даты
   const parseDate = (dateString) => {
     if (!dateString) return new Date();
-
-    // Пробуем разные форматы даты
     let date = new Date(dateString);
-
-    // Если дата невалидна, пробуем парсить как timestamp
     if (isNaN(date.getTime())) {
       date = new Date(parseInt(dateString));
     }
-
-    // Если все еще невалидна, возвращаем текущую дату
     if (isNaN(date.getTime())) {
-      console.warn("Invalid date:", dateString);
       return new Date();
     }
-
     return date;
   };
 
-  // Функция форматирования даты для таблицы
   const formatDateForTable = (dateString) => {
     const date = parseDate(dateString);
-    return date.toLocaleDateString("ru-RU");
+    return date.toLocaleDateString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+    });
   };
 
-  // Функция форматирования даты и времени для чека
   const formatDateTimeForReceipt = (dateString) => {
     const date = parseDate(dateString);
     return {
@@ -115,12 +125,8 @@ function Cashbox() {
       const data = await response.json();
       const records = Array.isArray(data) ? data : [];
 
-      // Логируем для отладки
-      console.log("Loaded records:", records);
-
       setCashRecords(records);
 
-      // Загружаем данные клиентов
       const clientIds = [...new Set(records.map((r) => r.clientId))];
       const clientsData = {};
 
@@ -153,74 +159,81 @@ function Cashbox() {
 
   const getClientName = (clientId) => {
     const client = clients[clientId];
-    if (!client) return "Неизвестный пациент";
-    return `${client.surname || ""} ${client.name || ""} ${
-      client.lastName || ""
-    }`.trim();
+    if (!client) return "—";
+    const surname = client.surname || "";
+    const name = client.name || "";
+    const lastName = client.lastName || "";
+    return `${surname} ${name} ${lastName}`.trim() || "—";
   };
 
   const getClientPhone = (clientId) => {
     return clients[clientId]?.phoneNumber || "—";
   };
 
-  const filteredRecords = cashRecords.filter((record) => {
-    const clientName = getClientName(record.clientId).toLowerCase();
-    const clientPhone = getClientPhone(record.clientId).toLowerCase();
+  const filteredRecords = useMemo(() => {
+    return cashRecords.filter((record) => {
+      const clientName = getClientName(record.clientId).toLowerCase();
+      const clientPhone = getClientPhone(record.clientId).toLowerCase();
 
-    const searchMatch = [
-      record.id,
-      clientName,
-      clientPhone,
-      record.servicesDescription,
-    ].some((field) =>
-      field?.toString().toLowerCase().includes(search.toLowerCase())
-    );
+      const searchMatch = [
+        record.id?.toString(),
+        clientName,
+        clientPhone,
+        record.servicesDescription?.toLowerCase(),
+      ].some((field) => field?.includes(search.toLowerCase()));
 
-    const statusMatch =
-      filterStatus === "all" || record.status === filterStatus;
+      const statusMatch =
+        filterStatus === "all" || record.status === filterStatus;
 
-    const paymentMatch =
-      filterPayment === "all" || record.paymentMethod === filterPayment;
+      const paymentMatch =
+        filterPayment === "all" || record.paymentMethod === filterPayment;
 
-    // Фильтр по периоду
-    let periodMatch = true;
-    if (filterPeriod !== "all") {
-      const recordDate = parseDate(record.transactionDate);
-      const today = new Date();
+      let periodMatch = true;
+      if (filterPeriod !== "all") {
+        // Используем createdAt для фильтрации периода
+        const recordDate = parseDate(
+          record.createdAt || record.transactionDate
+        );
+        const today = new Date();
 
-      if (filterPeriod === "today") {
-        periodMatch = recordDate.toDateString() === today.toDateString();
-      } else if (filterPeriod === "week") {
-        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-        periodMatch = recordDate >= weekAgo;
-      } else if (filterPeriod === "month") {
-        periodMatch =
-          recordDate.getMonth() === today.getMonth() &&
-          recordDate.getFullYear() === today.getFullYear();
+        if (filterPeriod === "today") {
+          periodMatch = recordDate.toDateString() === today.toDateString();
+        } else if (filterPeriod === "week") {
+          const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          periodMatch = recordDate >= weekAgo;
+        } else if (filterPeriod === "month") {
+          periodMatch =
+            recordDate.getMonth() === today.getMonth() &&
+            recordDate.getFullYear() === today.getFullYear();
+        }
       }
-    }
 
-    return searchMatch && statusMatch && paymentMatch && periodMatch;
-  });
+      return searchMatch && statusMatch && paymentMatch && periodMatch;
+    });
+  }, [cashRecords, search, filterStatus, filterPayment, filterPeriod]);
 
   const getStatusBadge = (status) => {
     const statusMap = {
-      paid: { label: "Оплач", color: "green" },
-      partial: { label: "Част", color: "yellow" },
+      paid: { label: "Оплачено", color: "green" },
+      partial: { label: "Частично", color: "yellow" },
       debt: { label: "Долг", color: "red" },
-      cancelled: { label: "Отм", color: "gray" },
+      cancelled: { label: "Отмена", color: "gray" },
     };
     const s = statusMap[status] || { label: status, color: "gray" };
-    return <Badge colorScheme={s.color}>{s.label}</Badge>;
+    return (
+      <Badge colorScheme={s.color} fontSize="xs" px={2} py={0.5}>
+        {s.label}
+      </Badge>
+    );
   };
 
   const getPaymentMethodLabel = (method) => {
     const methods = {
-      cash: " Наличные",
-      card: " Карта",
-      transfer: " Перевод",
-      terminal: " Терминал",
-      mixed: " Смешанный",
+      cash: "Налич.",
+      card: "Карта",
+      transfer: "Перевод",
+      terminal: "Термин.",
+      mixed: "Смешан.",
     };
     return methods[method] || method;
   };
@@ -292,7 +305,9 @@ function Cashbox() {
 
   const printReceipt = (record) => {
     const client = clients[record.clientId];
-    const { date, time } = formatDateTimeForReceipt(record.transactionDate);
+    // Используем createdAt для чека, если есть, иначе transactionDate
+    const dateField = record.createdAt || record.transactionDate;
+    const { date, time } = formatDateTimeForReceipt(dateField);
 
     const receiptHTML = `
       <!DOCTYPE html>
@@ -424,250 +439,396 @@ function Cashbox() {
 
     setTimeout(() => {
       printWindow.print();
+      printWindow.close();
     }, 250);
   };
 
-  // Статистика
-  const stats = {
-    totalRevenue: filteredRecords.reduce(
-      (sum, r) => sum + (r.paidAmount || 0),
-      0
-    ),
-    totalDebt: filteredRecords.reduce((sum, r) => sum + (r.debtAmount || 0), 0),
-    totalDiscount: filteredRecords.reduce(
-      (sum, r) => sum + (r.discount || 0),
-      0
-    ),
-    totalAmount: filteredRecords.reduce(
-      (sum, r) => sum + (r.totalAmount || 0),
-      0
-    ),
+  const handlePrintReceipt = () => {
+    if (!receiptOperationId.trim()) {
+      toast({
+        title: "Ошибка",
+        description: "Введите ID операции",
+        status: "warning",
+      });
+      return;
+    }
+
+    // Ищем по ID кассовой операции
+    const record = cashRecords.find(
+      (r) => r.id.toString() === receiptOperationId.trim()
+    );
+
+    if (!record) {
+      toast({
+        title: "Ошибка",
+        description: "Запись с таким ID операции не найдена",
+        status: "error",
+      });
+      return;
+    }
+
+    printReceipt(record);
+    setReceiptOperationId("");
   };
 
+  const stats = useMemo(() => {
+    return {
+      totalRevenue: filteredRecords.reduce(
+        (sum, r) => sum + (r.paidAmount || 0),
+        0
+      ),
+      totalDebt: filteredRecords.reduce(
+        (sum, r) => sum + (r.debtAmount || 0),
+        0
+      ),
+      totalDiscount: filteredRecords.reduce(
+        (sum, r) => sum + (r.discount || 0),
+        0
+      ),
+      totalTransactions: filteredRecords.length,
+    };
+  }, [filteredRecords]);
+
   return (
-    <Box p={4} borderRadius="16px" w="100%" bg="#fff">
-      {/* Статистика */}
-      <Box mb={6}>
-        <Text fontSize="2xl" fontWeight="bold" mb={4}>
+    <Box p={{ base: 2, md: 4 }} borderRadius="16px" w="100%" bg="#fff">
+      {/* Заголовок и кнопка печати */}
+      <Flex justify="space-between" align="center" mb={4} wrap="wrap" gap={2}>
+        <Text fontSize={{ base: "xl", md: "2xl" }} fontWeight="bold">
           Касса
         </Text>
 
-        <SimpleGrid columns={4} spacing={4} mb={4}>
-          <Box p={4} bg="blue.50" borderRadius="md">
-            <Text fontSize="sm" color="gray.600">
-              Всего операций
+        <HStack spacing={2}>
+          <InputGroup size="sm" w={{ base: "120px", md: "150px" }}>
+            <Input
+              placeholder="ID операции"
+              value={receiptOperationId}
+              onChange={(e) => setReceiptOperationId(e.target.value)}
+              fontSize="xs"
+            />
+          </InputGroup>
+          <Button
+            size="sm"
+            leftIcon={<PrinterIcon />}
+            onClick={handlePrintReceipt}
+            colorScheme="blue"
+          >
+            Чек
+          </Button>
+        </HStack>
+      </Flex>
+
+      {/* Статистика */}
+      <Grid
+        templateColumns={{ base: "repeat(2, 1fr)", md: "repeat(4, 1fr)" }}
+        gap={3}
+        mb={4}
+      >
+        <GridItem>
+          <Box p={3} bg="gray.50" borderRadius="md" h="100%">
+            <Text fontSize="xs" color="gray.600" mb={1}>
+              Операции
             </Text>
-            <Text fontSize="2xl" fontWeight="bold" color="blue.600">
-              {filteredRecords.length}
+            <Text fontSize="lg" fontWeight="bold">
+              {stats.totalTransactions}
             </Text>
           </Box>
-
-          <Box p={4} bg="green.50" borderRadius="md">
-            <Text fontSize="sm" color="gray.600">
+        </GridItem>
+        <GridItem>
+          <Box p={3} bg="green.50" borderRadius="md" h="100%">
+            <Text fontSize="xs" color="gray.600" mb={1}>
               Выручка
             </Text>
-            <Text fontSize="2xl" fontWeight="bold" color="green.600">
-              {stats.totalRevenue.toLocaleString()} сум
+            <Text fontSize="lg" fontWeight="bold" color="green.600">
+              {stats.totalRevenue.toLocaleString()}
             </Text>
           </Box>
-
-          <Box p={4} bg="red.50" borderRadius="md">
-            <Text fontSize="sm" color="gray.600">
+        </GridItem>
+        <GridItem>
+          <Box p={3} bg="red.50" borderRadius="md" h="100%">
+            <Text fontSize="xs" color="gray.600" mb={1}>
               Долг
             </Text>
-            <Text fontSize="2xl" fontWeight="bold" color="red.600">
-              {stats.totalDebt.toLocaleString()} сум
+            <Text fontSize="lg" fontWeight="bold" color="red.600">
+              {stats.totalDebt.toLocaleString()}
             </Text>
           </Box>
-
-          <Box p={4} bg="yellow.50" borderRadius="md">
-            <Text fontSize="sm" color="gray.600">
+        </GridItem>
+        <GridItem>
+          <Box p={3} bg="yellow.50" borderRadius="md" h="100%">
+            <Text fontSize="xs" color="gray.600" mb={1}>
               Скидки
             </Text>
-            <Text fontSize="2xl" fontWeight="bold" color="yellow.600">
-              {stats.totalDiscount.toLocaleString()} сум
+            <Text fontSize="lg" fontWeight="bold" color="yellow.600">
+              {stats.totalDiscount.toLocaleString()}
             </Text>
           </Box>
-        </SimpleGrid>
-      </Box>
+        </GridItem>
+      </Grid>
 
-      <Divider mb={6} />
+      <Divider mb={4} />
 
       {/* Фильтры */}
-      <HStack spacing={4} mb={4} wrap="wrap">
-        <InputGroup w={{ base: "100%", md: "300px" }}>
-          <Input
-            placeholder="Поиск по пациенту, телефону..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <InputRightElement>
-            <SearchIcon color="gray.400" />
-          </InputRightElement>
-        </InputGroup>
+      <Grid
+        templateColumns={{
+          base: "repeat(1, 1fr)",
+          sm: "repeat(2, 1fr)",
+          md: "repeat(4, 1fr)",
+        }}
+        gap={3}
+        mb={4}
+      >
+        <GridItem colSpan={{ base: 1, sm: 2, md: 1 }}>
+          <InputGroup size="sm">
+            <Input
+              placeholder="Поиск..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              fontSize="xs"
+            />
+            <InputRightElement>
+              <SearchIcon color="gray.400" boxSize={3} />
+            </InputRightElement>
+          </InputGroup>
+        </GridItem>
 
-        <Select
-          w={{ base: "100%", md: "150px" }}
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-        >
-          <option value="all">Все статусы</option>
-          <option value="paid">Оплачено</option>
-          <option value="partial">Частично</option>
-          <option value="debt">Долг</option>
-        </Select>
+        <GridItem>
+          <Select
+            size="sm"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            fontSize="xs"
+          >
+            <option value="all">Все статусы</option>
+            <option value="paid">Оплачено</option>
+            <option value="partial">Частично</option>
+            <option value="debt">Долг</option>
+          </Select>
+        </GridItem>
 
-        <Select
-          w={{ base: "100%", md: "150px" }}
-          value={filterPayment}
-          onChange={(e) => setFilterPayment(e.target.value)}
-        >
-          <option value="all">Все оплаты</option>
-          <option value="cash">Наличные</option>
-          <option value="card">Карта</option>
-          <option value="transfer">Перевод</option>
-          <option value="terminal">Терминал</option>
-          <option value="mixed">Смешанный</option>
-        </Select>
+        <GridItem>
+          <Select
+            size="sm"
+            value={filterPayment}
+            onChange={(e) => setFilterPayment(e.target.value)}
+            fontSize="xs"
+          >
+            <option value="all">Оплата</option>
+            <option value="cash">Налич.</option>
+            <option value="card">Карта</option>
+            <option value="transfer">Перевод</option>
+            <option value="terminal">Термин.</option>
+          </Select>
+        </GridItem>
 
-        <Select
-          w={{ base: "100%", md: "150px" }}
-          value={filterPeriod}
-          onChange={(e) => setFilterPeriod(e.target.value)}
-        >
-          <option value="all">За все время</option>
-          <option value="today">Сегодня</option>
-          <option value="week">За неделю</option>
-          <option value="month">За месяц</option>
-        </Select>
-      </HStack>
+        <GridItem>
+          <Select
+            size="sm"
+            value={filterPeriod}
+            onChange={(e) => setFilterPeriod(e.target.value)}
+            fontSize="xs"
+          >
+            <option value="all">Весь период</option>
+            <option value="today">Сегодня</option>
+            <option value="week">Неделя</option>
+            <option value="month">Месяц</option>
+          </Select>
+        </GridItem>
+      </Grid>
 
       {/* Таблица */}
-      <TableContainer>
-        <Table variant="striped" size="sm">
-          <Thead bg="gray.100">
-            <Tr>
-              <Th>№</Th>
-              <Th>Дата</Th>
-              <Th>Пациент</Th>
-              <Th>Телефон</Th>
-              <Th>Услуги</Th>
-              <Th>Сумма</Th>
-              <Th>Итого</Th>
-              <Th>Оплачено</Th>
-              <Th>Долг</Th>
-              <Th>Действия</Th>
-              <Th>Оплата</Th>
-              <Th>Статус</Th>
-            </Tr>
-          </Thead>
-          <Tbody>
-            {filteredRecords.map((record) => (
-              <Tr key={record.id} _hover={{ bg: "gray.50" }}>
-                <Td fontWeight="medium">{record.id}</Td>
-                <Td fontSize="xs">{formatDateForTable(record.createdAt)}</Td>
-                <Td>{getClientName(record.clientId)}</Td>
-                <Td>{getClientPhone(record.clientId)}</Td>
-                <Td fontSize="xs" maxW="200px" isTruncated>
-                  {record.servicesDescription}
-                </Td>
-                <Td>{record.totalAmount?.toLocaleString()} сум</Td>
-                <Td color="red.500">
-                  {record.discount > 0
-                    ? `-${record.discount.toLocaleString()}`
-                    : "—"}
-                </Td>
-                <Td fontWeight="bold">
-                  {record.finalAmount?.toLocaleString()} сум
-                </Td>
-                <Td fontWeight="bold" color="green.600">
-                  {record.paidAmount?.toLocaleString()} сум
-                </Td>
-                <Td
-                  fontWeight="bold"
-                  color={record.debtAmount > 0 ? "red.600" : "gray.500"}
-                >
-                  {record.debtAmount?.toLocaleString()} сум
-                </Td>
-                <Td>
-                  <HStack spacing={2}>
-                    <Button
-                      size="xs"
-                      leftIcon={<DownloadIcon />}
-                      onClick={() => printReceipt(record)}
-                    >
-                      Чек
-                    </Button>
-                    {record.debtAmount > 0 && (
-                      <Button
-                        size="xs"
-                        colorScheme="green"
-                        onClick={() => {
-                          setSelectedRecord(record);
-                          setPaymentForm({
-                            amount: record.debtAmount,
-                            method: "cash",
-                          });
-                          onPaymentOpen();
-                        }}
-                      >
-                        Внести
-                      </Button>
-                    )}
-                  </HStack>
-                </Td>
-                <Td fontSize="xs">
-                  {getPaymentMethodLabel(record.paymentMethod)}
-                </Td>
-                <Td>{getStatusBadge(record.status)}</Td>
+      <Box overflowX="auto">
+        <TableContainer
+          minW="800px"
+          borderWidth="1px"
+          borderRadius="md"
+          borderColor="gray.200"
+        >
+          <Table size="sm" variant="simple">
+            <Thead bg="gray.50">
+              <Tr>
+                <Th px={2} py={2} fontSize="xs" fontWeight="bold" width="60px">
+                  №
+                </Th>
+                <Th px={2} py={2} fontSize="xs" fontWeight="bold" width="70px">
+                  Дата
+                </Th>
+                <Th px={2} py={2} fontSize="xs" fontWeight="bold" width="120px">
+                  Пациент
+                </Th>
+                <Th px={2} py={2} fontSize="xs" fontWeight="bold" width="100px">
+                  Услуги
+                </Th>
+                <Th px={2} py={2} fontSize="xs" fontWeight="bold" width="80px">
+                  Сумма
+                </Th>
+                <Th px={2} py={2} fontSize="xs" fontWeight="bold" width="70px">
+                  Итого
+                </Th>
+                <Th px={2} py={2} fontSize="xs" fontWeight="bold" width="80px">
+                  Оплата
+                </Th>
+                <Th px={2} py={2} fontSize="xs" fontWeight="bold" width="80px">
+                  Статус
+                </Th>
+                <Th px={2} py={2} fontSize="xs" fontWeight="bold" width="100px">
+                  Действия
+                </Th>
               </Tr>
-            ))}
-          </Tbody>
-        </Table>
-      </TableContainer>
+            </Thead>
+            <Tbody>
+              {filteredRecords.map((record) => (
+                <Tr key={record.id} _hover={{ bg: "gray.50" }}>
+                  <Td px={2} py={2} fontSize="xs" fontWeight="medium">
+                    {record.id}
+                  </Td>
+                  <Td px={2} py={2} fontSize="xs">
+                    {/* Используем createdAt, если есть, иначе transactionDate */}
+                    {formatDateForTable(
+                      record.createdAt || record.transactionDate
+                    )}
+                  </Td>
+                  <Td px={2} py={2}>
+                    <Box>
+                      <Text fontSize="xs" fontWeight="medium">
+                        {getClientName(record.clientId)}
+                      </Text>
+                      <Text fontSize="2xs" color="gray.600">
+                        {getClientPhone(record.clientId)}
+                      </Text>
+                    </Box>
+                  </Td>
+                  <Td px={2} py={2} fontSize="2xs" maxW="120px" isTruncated>
+                    {record.servicesDescription || "—"}
+                  </Td>
+                  <Td px={2} py={2} fontSize="xs" textAlign="right">
+                    <Box>
+                      <Text>{record.totalAmount?.toLocaleString()}</Text>
+                      {record.discount > 0 && (
+                        <Text fontSize="2xs" color="red.500">
+                          -{record.discount?.toLocaleString()}
+                        </Text>
+                      )}
+                    </Box>
+                  </Td>
+                  <Td
+                    px={2}
+                    py={2}
+                    fontSize="xs"
+                    fontWeight="bold"
+                    textAlign="right"
+                  >
+                    {record.finalAmount?.toLocaleString()}
+                  </Td>
+                  <Td px={2} py={2} fontSize="xs">
+                    <Box>
+                      <Text>{getPaymentMethodLabel(record.paymentMethod)}</Text>
+                      <HStack spacing={1} mt={0.5}>
+                        <Text fontSize="2xs" color="green.600">
+                          {record.paidAmount?.toLocaleString()}
+                        </Text>
+                        {record.debtAmount > 0 && (
+                          <Text fontSize="2xs" color="red.600">
+                            +{record.debtAmount?.toLocaleString()}
+                          </Text>
+                        )}
+                      </HStack>
+                    </Box>
+                  </Td>
+                  <Td px={2} py={2}>
+                    {getStatusBadge(record.status)}
+                  </Td>
+                  <Td px={2} py={2}>
+                    <HStack spacing={1}>
+                      <IconButton
+                        aria-label="Печать чека"
+                        icon={<PrinterIcon />}
+                        size="xs"
+                        colorScheme="blue"
+                        onClick={() => printReceipt(record)}
+                      />
+                      {record.debtAmount > 0 && (
+                        <Button
+                          size="xs"
+                          colorScheme="green"
+                          onClick={() => {
+                            setSelectedRecord(record);
+                            setPaymentForm({
+                              amount: record.debtAmount,
+                              method: "cash",
+                            });
+                            onPaymentOpen();
+                          }}
+                        >
+                          Внести
+                        </Button>
+                      )}
+                    </HStack>
+                  </Td>
+                </Tr>
+              ))}
+            </Tbody>
+          </Table>
+        </TableContainer>
+      </Box>
+
       {filteredRecords.length === 0 && (
         <Box textAlign="center" py={8}>
-          <Text color="gray.500">Записи не найдены</Text>
+          <Text color="gray.500" fontSize="sm">
+            Записи не найдены
+          </Text>
         </Box>
       )}
 
       {/* Модальное окно добавления платежа */}
-      <Modal isOpen={isPaymentOpen} onClose={onPaymentClose}>
+      <Modal isOpen={isPaymentOpen} onClose={onPaymentClose} size="sm">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Добавить платеж</ModalHeader>
+          <ModalHeader fontSize="md">Добавить платеж</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             {selectedRecord && (
-              <VStack align="stretch" spacing={4}>
-                <Box p={3} bg="gray.50" borderRadius="md">
-                  <Text fontSize="sm" mb={1}>
+              <VStack align="stretch" spacing={3}>
+                <Box p={3} bg="gray.50" borderRadius="md" fontSize="sm">
+                  <Text mb={1}>
                     <strong>Пациент:</strong>{" "}
                     {getClientName(selectedRecord.clientId)}
                   </Text>
-                  <Text fontSize="sm" mb={1}>
-                    <strong>Остаток долга:</strong>{" "}
+                  <Text mb={1}>
+                    <strong>Итого:</strong>{" "}
+                    {selectedRecord.finalAmount?.toLocaleString()} сум
+                  </Text>
+                  <Text>
+                    <strong>Долг:</strong>{" "}
                     {selectedRecord.debtAmount?.toLocaleString()} сум
                   </Text>
                 </Box>
 
                 <FormControl>
-                  <FormLabel>Сумма платежа</FormLabel>
-                  <Input
-                    type="number"
+                  <FormLabel fontSize="sm">Сумма платежа</FormLabel>
+                  <NumberInput
+                    size="sm"
                     value={paymentForm.amount}
-                    onChange={(e) =>
+                    onChange={(value) =>
                       setPaymentForm({
                         ...paymentForm,
-                        amount: parseFloat(e.target.value) || 0,
+                        amount: parseFloat(value) || 0,
                       })
                     }
-                  />
+                    min={0}
+                    max={selectedRecord.debtAmount}
+                  >
+                    <NumberInputField />
+                    <NumberInputStepper>
+                      <NumberIncrementStepper />
+                      <NumberDecrementStepper />
+                    </NumberInputStepper>
+                  </NumberInput>
                 </FormControl>
 
                 <FormControl>
-                  <FormLabel>Способ оплаты</FormLabel>
+                  <FormLabel fontSize="sm">Способ оплаты</FormLabel>
                   <Select
+                    size="sm"
                     value={paymentForm.method}
                     onChange={(e) =>
                       setPaymentForm({ ...paymentForm, method: e.target.value })
@@ -683,15 +844,16 @@ function Cashbox() {
             )}
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onPaymentClose}>
+            <Button size="sm" variant="ghost" mr={3} onClick={onPaymentClose}>
               Отмена
             </Button>
             <Button
+              size="sm"
               colorScheme="green"
               onClick={handleAddPayment}
               isLoading={loading}
             >
-              Добавить платеж
+              Добавить
             </Button>
           </ModalFooter>
         </ModalContent>
