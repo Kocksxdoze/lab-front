@@ -193,6 +193,8 @@ function Cabinet() {
               ...test,
               client,
               category,
+              // ВАЖНО: Сохраняем отделение из категории
+              department: category?.department || test.department,
               // Автоматически берем референтные значения из категории
               unit: category?.unit || test.unit,
               referenceMin:
@@ -289,15 +291,18 @@ function Cabinet() {
     }
   };
 
-  // Обработчики открытия форм
   const handleOpenTest = (test) => {
     setSelectedTest(test);
+
+    const methodByDepartment =
+      test.category?.department || test.department || "";
+
     setTestResult({
       result: test.result || "",
       conclusion: test.conclusion || "",
       isAbnormal: test.isAbnormal || false,
       ready: test.ready || false,
-      method: test.method || "",
+      method: test.method || methodByDepartment, // Автоматически используем отделение как метод
       notes: test.notes || "",
     });
     onOpen();
@@ -1408,7 +1413,7 @@ function Cabinet() {
                     <HStack mb={3}>
                       <InfoIcon color="blue.500" />
                       <Text fontWeight="bold" color="blue.700">
-                        Референтные значения (из категории "
+                        Информация об анализе (категория "
                         {selectedTest.category?.name || "Не указана"}")
                       </Text>
                     </HStack>
@@ -1418,13 +1423,27 @@ function Cabinet() {
                         {selectedTest.category?.name || "—"}
                       </Text>
                       <Text fontSize="sm">
+                        <strong>Отделение:</strong>{" "}
+                        <Badge colorScheme="purple">
+                          {selectedTest.department ||
+                            selectedTest.category?.department ||
+                            "—"}
+                        </Badge>
+                      </Text>
+                      <Text fontSize="sm">
                         <strong>Единица измерения:</strong>{" "}
                         {selectedTest.unit || "—"}
                       </Text>
                       <Text fontSize="sm">
-                        <strong>Референтные значения:</strong>
+                        <strong>Метод исследования:</strong>{" "}
+                        <Badge colorScheme="green">
+                          {testResult.method ||
+                            selectedTest.department ||
+                            "Не указан"}
+                        </Badge>
                       </Text>
-                      <Text fontSize="sm">
+                      <Text fontSize="sm" gridColumn="span 2">
+                        <strong>Референтные значения:</strong>{" "}
                         {selectedTest.referenceText ||
                           (selectedTest.referenceMin &&
                           selectedTest.referenceMax
@@ -1448,18 +1467,6 @@ function Cabinet() {
                         setTestResult({ ...testResult, result: e.target.value })
                       }
                       placeholder="Введите результат"
-                      isDisabled={selectedTest.ready}
-                    />
-                  </FormControl>
-
-                  <FormControl>
-                    <FormLabel>Метод исследования</FormLabel>
-                    <Input
-                      value={testResult.method}
-                      onChange={(e) =>
-                        setTestResult({ ...testResult, method: e.target.value })
-                      }
-                      placeholder="Например: Спектрофотометрия"
                       isDisabled={selectedTest.ready}
                     />
                   </FormControl>

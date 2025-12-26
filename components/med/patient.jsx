@@ -126,7 +126,31 @@ export default function PatientPage() {
       const labResponse = await fetch(`${api}/lab/client/${id}`);
       if (labResponse.ok) {
         const labs = await labResponse.json();
-        setLabResults(labs);
+
+        // Загружаем категории для каждого анализа
+        const labsWithCategories = await Promise.all(
+          labs.map(async (lab) => {
+            try {
+              const categoryResponse = await fetch(
+                `${api}/lab-category/${lab.categoryId}`
+              );
+              const category = categoryResponse.ok
+                ? await categoryResponse.json()
+                : null;
+
+              return {
+                ...lab,
+                category,
+                // Если отделение не указано в анализе, берём из категории
+                department: lab.department || category?.department || "—",
+              };
+            } catch (err) {
+              return lab;
+            }
+          })
+        );
+
+        setLabResults(labsWithCategories);
       }
 
       const blankAssignmentsResponse = await fetch(
@@ -407,6 +431,7 @@ export default function PatientPage() {
               testCode: analysis.code || "",
               price: analysis.price || 0,
               sampleType: analysis.sampleType || "Кровь (сыворотка)",
+              department: analysis.department || "",
               unit: null,
               referenceMin: null,
               referenceMax: null,
@@ -433,6 +458,7 @@ export default function PatientPage() {
               testCode: test.code || analysis.code || "",
               price: analysis.price || 0,
               sampleType: analysis.sampleType || "Кровь (сыворотка)",
+              department: analysis.department || "",
               unit: test.unit || null,
               referenceMin: test.referenceMin || null,
               referenceMax: test.referenceMax || null,
@@ -623,6 +649,120 @@ export default function PatientPage() {
     }, 500);
   };
 
+  // Функция для проверки отклонений с учетом операторов <, >
+  const checkAbnormal = (result, referenceMin, referenceMax, referenceText) => {
+    if (!result) return false;
+
+    const resultStr = String(result).trim();
+
+    // Проверяем текстовые референтные значения с операторами
+    if (referenceText) {
+      const refStr = String(referenceText).trim();
+
+      // Проверка для "<число"
+      const lessThanMatch = refStr.match(/^<\s*(\d+\.?\d*)/);
+      if (lessThanMatch) {
+        const threshold = parseFloat(lessThanMatch[1]);
+        const numResult = parseFloat(resultStr.replace(/[<>]/g, ""));
+        if (!isNaN(numResult) && numResult >= threshold) {
+          return true;
+        }
+      }
+
+      // Проверка для ">число"
+      const greaterThanMatch = refStr.match(/^>\s*(\d+\.?\d*)/);
+      if (greaterThanMatch) {
+        const threshold = parseFloat(greaterThanMatch[1]);
+        const numResult = parseFloat(resultStr.replace(/[<>]/g, ""));
+        if (!isNaN(numResult) && numResult <= threshold) {
+          return true;
+        }
+      }
+    }
+
+    // Стандартная проверка числового диапазона
+    const numResult = parseFloat(resultStr);
+    if (!isNaN(numResult) && referenceMin !== null && referenceMax !== null) {
+      const min = parseFloat(referenceMin);
+      const max = parseFloat(referenceMax);
+      if (!isNaN(min) && !isNaN(max)) {
+        return numResult < min || numResult > max;
+      }
+    }
+
+    return false;
+  };
+
+  // Функция для определения стрелки отклонения
+  const getArrow = (result, referenceMin, referenceMax, referenceText) => {
+    if (!result) return "";
+
+    const resultStr = String(result).trim();
+    const numResult = parseFloat(resultStr.replace(/[<>]/g, ""));
+
+    if (isNaN(numResult)) return "";
+
+    // Проверка текстовых референтных значений с операторами
+    if (referenceText) {
+      const refStr = String(referenceText).trim();
+
+      const lessThanMatch = refStr.match(/^<\s*(\d+\.?\d*)/);
+      if (lessThanMatch) {
+        const threshold = parseFloat(lessThanMatch[1]);
+        if (numResult >= threshold) {
+          return '<span class="arrow arrow-up">↑</span>';
+        }
+        return "";
+      }
+
+      const greaterThanMatch = refStr.match(/^>\s*(\d+\.?\d*)/);
+      if (greaterThanMatch) {
+        const threshold = parseFloat(greaterThanMatch[1]);
+        if (numResult <= threshold) {
+          return '<span class="arrow arrow-down">↓</span>';
+        }
+        return "";
+      }
+    }
+
+    // Стандартная проверка числового диапазона
+    if (referenceMin !== null && referenceMax !== null) {
+      const min = parseFloat(referenceMin);
+      const max = parseFloat(referenceMax);
+
+      if (!isNaN(min) && !isNaN(max)) {
+        if (numResult > max) {
+          return '<span class="arrow arrow-up">↑</span>';
+        } else if (numResult < min) {
+          return '<span class="arrow arrow-down">↓</span>';
+        }
+      }
+    }
+
+    return "";
+  };
+
+  // Функция для очистки результата от лишних нулей
+  const cleanResult = (result) => {
+    if (!result) return "—";
+
+    const resultStr = String(result).trim();
+
+    // Если содержит операторы < или >, оставляем как есть
+    if (resultStr.includes("<") || resultStr.includes(">")) {
+      return resultStr;
+    }
+
+    // Пробуем распарсить как число
+    const numResult = parseFloat(resultStr);
+    if (!isNaN(numResult)) {
+      // Убираем лишние нули, но сохраняем до 2 значащих цифр после запятой
+      return numResult.toString();
+    }
+
+    return resultStr;
+  };
+
   const generatePrintContent = (results, blankResults) => {
     const fio = `${patientData.surname || ""} ${patientData.name || ""} ${
       patientData.lastName || ""
@@ -660,8 +800,8 @@ export default function PatientPage() {
     
     body {
       font-family: Arial, sans-serif;
-      font-size: 11px;
-      line-height: 1.4;
+      font-size: 10px;
+      line-height: 1.3;
       color: #000;
       background: #fff;
     }
@@ -698,21 +838,21 @@ export default function PatientPage() {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 15px;
-      padding-bottom: 15px;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
       border-bottom: 2px solid #2B7EC1;
     }
     
     .header-left {
       display: flex;
       align-items: flex-start;
-      gap: 15px;
+      gap: 12px;
       flex: 1;
     }
     
     .logo img {
-      width: 70px;
-      height: 70px;
+      width: 60px;
+      height: 60px;
     }
     
     .header-text {
@@ -720,56 +860,56 @@ export default function PatientPage() {
     }
     
     .company-name {
-      font-size: 24px;
+      font-size: 20px;
       font-weight: bold;
       color: #2B7EC1;
-      margin-bottom: 5px;
+      margin-bottom: 4px;
       letter-spacing: 1px;
     }
     
     .subtitle {
-      font-size: 10px;
+      font-size: 9px;
       color: #2B7EC1;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       text-transform: uppercase;
     }
     
     .association {
-      font-size: 8px;
+      font-size: 7px;
       color: #666;
-      line-height: 1.4;
+      line-height: 1.3;
       max-width: 400px;
     }
     
     .certificate {
       display: inline-block;
       border: 1px solid #000;
-      padding: 3px 10px;
-      font-size: 9px;
-      margin-top: 8px;
+      padding: 2px 8px;
+      font-size: 8px;
+      margin-top: 6px;
     }
     
     .header-right {
       text-align: right;
-      font-size: 9px;
-      line-height: 1.6;
+      font-size: 8px;
+      line-height: 1.5;
       color: #333;
     }
     
     .patient-info {
-      margin: 20px 0;
-      font-size: 10px;
+      margin: 15px 0;
+      font-size: 9px;
     }
     
     .info-row {
       display: flex;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       border-bottom: 1px solid #E8E8E8;
-      padding-bottom: 5px;
+      padding-bottom: 4px;
     }
     
     .info-label {
-      width: 150px;
+      width: 130px;
       color: #666;
       font-weight: 500;
     }
@@ -780,63 +920,64 @@ export default function PatientPage() {
     }
     
     .results-section {
-      margin: 30px 0;
+      margin: 20px 0;
     }
     
     .results-title {
       text-align: center;
-      font-size: 14px;
+      font-size: 12px;
       font-weight: bold;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
       color: #2B7EC1;
     }
 
     .department-title {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: bold;
       color: #2B7EC1;
-      margin: 20px 0 10px 0;
-      padding: 5px 10px;
+      margin: 15px 0 8px 0;
+      padding: 4px 8px;
       background: #F0F0F0;
-      border-left: 4px solid #2B7EC1;
+      border-left: 3px solid #2B7EC1;
     }
     
     .results-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
+      font-size: 9px;
     }
     
     .results-table th {
       background: #F0F0F0;
       border: 1px solid #000;
-      padding: 8px;
+      padding: 5px;
       text-align: center;
       font-weight: bold;
-      font-size: 10px;
+      font-size: 9px;
     }
     
     .results-table td {
       border: 1px solid #000;
-      padding: 8px;
+      padding: 5px;
       vertical-align: middle;
     }
     
     .test-name {
       font-weight: bold;
-      font-size: 11px;
+      font-size: 9px;
     }
     
     .result-value {
       text-align: center;
       font-weight: bold;
-      font-size: 12px;
+      font-size: 10px;
     }
 
     .arrow {
       display: inline-block;
-      margin-left: 5px;
-      font-size: 14px;
+      margin-left: 4px;
+      font-size: 12px;
       font-weight: bold;
     }
 
@@ -850,11 +991,11 @@ export default function PatientPage() {
     
     .unit {
       text-align: center;
-      font-size: 10px;
+      font-size: 9px;
     }
     
     .reference {
-      font-size: 9px;
+      font-size: 8px;
       color: #666;
       text-align: center;
     }
@@ -869,13 +1010,13 @@ export default function PatientPage() {
     }
     
     .footer-section {
-      margin-top: 40px;
+      margin-top: 30px;
     }
     
     .signatures {
       display: flex;
       justify-content: space-between;
-      margin-top: 30px;
+      margin-top: 25px;
     }
     
     .signature-block {
@@ -884,95 +1025,95 @@ export default function PatientPage() {
     }
     
     .signature-line {
-      margin-top: 50px;
-      padding-top: 5px;
+      margin-top: 40px;
+      padding-top: 4px;
       border-top: 1px solid #000;
-      font-size: 10px;
+      font-size: 9px;
     }
     
     .barcode {
       text-align: right;
-      margin-top: 20px;
-      margin-bottom: 15px;
+      margin-top: 15px;
+      margin-bottom: 12px;
     }
 
     .barcode img {
-      height: 40px;
+      height: 35px;
       width: auto;
     }
     
     .disclaimer {
-      margin-top: 15px;
+      margin-top: 12px;
       text-align: center;
-      font-size: 9px;
+      font-size: 8px;
       color: #FF9800;
       font-style: italic;
     }
     
     .document-footer {
-      margin-top: 20px;
-      padding-top: 10px;
+      margin-top: 15px;
+      padding-top: 8px;
       border-top: 1px solid #DDD;
       text-align: center;
-      font-size: 8px;
+      font-size: 7px;
       color: #999;
     }
     
     .method-info {
-      font-size: 9px;
+      font-size: 8px;
       color: #666;
       font-style: italic;
-      margin-top: 3px;
+      margin-top: 2px;
     }
     
     .conclusion-section {
-      margin-top: 20px;
-      padding: 10px;
+      margin-top: 15px;
+      padding: 8px;
       background: #F5F5F5;
       border-left: 3px solid #2B7EC1;
     }
     
     .conclusion-title {
       font-weight: bold;
-      font-size: 11px;
-      margin-bottom: 5px;
+      font-size: 10px;
+      margin-bottom: 4px;
     }
     
     .conclusion-text {
-      font-size: 10px;
-      line-height: 1.5;
+      font-size: 9px;
+      line-height: 1.4;
     }
 
     .blank-section {
-      margin: 30px 0;
+      margin: 20px 0;
       page-break-inside: avoid;
     }
 
     .blank-title {
-      font-size: 14px;
+      font-size: 12px;
       font-weight: bold;
       color: #2B7EC1;
-      margin-bottom: 15px;
-      padding: 8px 10px;
+      margin-bottom: 12px;
+      padding: 6px 8px;
       background: #F0F0F0;
-      border-left: 4px solid #2B7EC1;
+      border-left: 3px solid #2B7EC1;
     }
 
     .blank-content {
-      margin: 15px 0;
+      margin: 12px 0;
     }
 
     .blank-content table {
       width: 100%;
       border-collapse: collapse;
-      margin: 10px 0;
+      margin: 8px 0;
     }
 
     .blank-content table th,
     .blank-content table td {
       border: 1px solid #000;
-      padding: 8px;
-      font-size: 10px;
+      padding: 6px;
+      font-size: 9px;
     }
 
     .blank-content table th {
@@ -1058,11 +1199,11 @@ export default function PatientPage() {
           <table class="results-table">
             <thead>
               <tr>
-                <th style="width: 30%;">Показатель</th>
+                <th style="width: 35%;">Показатель</th>
                 <th style="width: 15%;">Результат</th>
-                <th style="width: 10%;">Ед. изм.</th>
-                <th style="width: 20%;">Референтные значения</th>
-                <th style="width: 25%;">Метод</th>
+                <th style="width: 12%;">Ед. изм.</th>
+                <th style="width: 18%;">Референтные значения</th>
+                <th style="width: 20%;">Метод</th>
               </tr>
             </thead>
             <tbody>
@@ -1080,54 +1221,56 @@ export default function PatientPage() {
                     referenceDisplay = lab.norma;
                   }
 
-                  // Определяем направление стрелки
-                  let arrow = "";
-                  if (lab.result && lab.referenceMin && lab.referenceMax) {
-                    const numResult = parseFloat(lab.result);
-                    const min = parseFloat(lab.referenceMin);
-                    const max = parseFloat(lab.referenceMax);
+                  // Очищаем результат от лишних нулей
+                  const cleanedResult = cleanResult(lab.result);
 
-                    if (!isNaN(numResult) && !isNaN(min) && !isNaN(max)) {
-                      if (numResult > max) {
-                        arrow = '<span class="arrow arrow-up">↑</span>';
-                      } else if (numResult < min) {
-                        arrow = '<span class="arrow arrow-down">↓</span>';
-                      }
-                    }
-                  }
+                  // Определяем стрелку отклонения
+                  const arrow = getArrow(
+                    lab.result,
+                    lab.referenceMin,
+                    lab.referenceMax,
+                    lab.referenceText
+                  );
+
+                  // Проверяем отклонение
+                  const isAbnormal = checkAbnormal(
+                    lab.result,
+                    lab.referenceMin,
+                    lab.referenceMax,
+                    lab.referenceText
+                  );
 
                   return `
-                    <tr${lab.isAbnormal ? ' class="abnormal"' : ""}>
+                    <tr${isAbnormal ? ' class="abnormal"' : ""}>
                       <td class="test-name">
                         ${lab.name}
-                        ${
-                          lab.testCode
-                            ? `<div class="method-info">Код: ${lab.testCode}</div>`
-                            : ""
-                        }
                       </td>
                       <td class="result-value${
-                        lab.isAbnormal ? " result-abnormal" : ""
+                        isAbnormal ? " result-abnormal" : ""
                       }">
-                        ${lab.result || "—"}${arrow}
+                        ${cleanedResult}${arrow}
                       </td>
                       <td class="unit">${lab.unit || "—"}</td>
                       <td class="reference">${referenceDisplay}</td>
-                      <td style="font-size: 9px;">
-                        <strong>${lab.department || "—"}</strong>
-                        ${lab.method ? `<br>${lab.method}` : ""}
+                      <td style="font-size: 9px; text-align: center;">
+                        ${lab.department || "—"}
+                        ${
+                          lab.method
+                            ? `<br><span style="font-size: 8px; color: #666;">${lab.method}</span>`
+                            : ""
+                        }
                       </td>
                     </tr>
                     ${
                       lab.conclusion
                         ? `
                     <tr>
-                      <td colspan="5" style="padding: 8px; background: #F9F9F9;">
+                      <td colspan="5" style="padding: 6px; background: #F9F9F9;">
                         <div class="conclusion-title">Заключение врача-лаборанта:</div>
                         <div class="conclusion-text">${lab.conclusion}</div>
                         ${
                           lab.executedBy
-                            ? `<div class="method-info" style="margin-top: 5px;">Исполнитель: ${lab.executedBy}</div>`
+                            ? `<div class="method-info" style="margin-top: 4px;">Исполнитель: ${lab.executedBy}</div>`
                             : ""
                         }
                       </td>
@@ -1173,7 +1316,7 @@ export default function PatientPage() {
               ${
                 blankAssignment.executedBy
                   ? `
-                <div class="method-info" style="margin-top: 5px;">Исполнитель: ${blankAssignment.executedBy}</div>
+                <div class="method-info" style="margin-top: 4px;">Исполнитель: ${blankAssignment.executedBy}</div>
               `
                   : ""
               }
@@ -1239,7 +1382,7 @@ export default function PatientPage() {
     >
       {/* Заголовок */}
       <Flex justify="space-between" align="center" mb={6}>
-        <Heading size="lg">
+        <Heading size="lg" pr={5}>
           Карточка пациента #{id} - {patientData.surname} {patientData.name}{" "}
           {patientData.lastName}
         </Heading>
@@ -1393,7 +1536,6 @@ export default function PatientPage() {
                             />
                           )}
                         </Th>
-                        <Th>Код</Th>
                         <Th>Название</Th>
                         <Th>Результат</Th>
                         <Th>Ед. изм.</Th>
@@ -1407,7 +1549,16 @@ export default function PatientPage() {
                       {labResults.map((lab) => (
                         <Tr
                           key={lab.id}
-                          bg={lab.isAbnormal ? "red.50" : undefined}
+                          bg={
+                            checkAbnormal(
+                              lab.result,
+                              lab.referenceMin,
+                              lab.referenceMax,
+                              lab.referenceText
+                            )
+                              ? "red.50"
+                              : undefined
+                          }
                         >
                           <Td>
                             {lab.ready && (
@@ -1417,15 +1568,23 @@ export default function PatientPage() {
                               />
                             )}
                           </Td>
-                          <Td fontWeight="bold">{lab.testCode || "—"}</Td>
                           <Td>{lab.name}</Td>
                           <Td
                             fontWeight="bold"
-                            color={lab.isAbnormal ? "red.600" : "green.600"}
+                            color={
+                              checkAbnormal(
+                                lab.result,
+                                lab.referenceMin,
+                                lab.referenceMax,
+                                lab.referenceText
+                              )
+                                ? "red.600"
+                                : "green.600"
+                            }
                           >
                             {lab.result ? (
                               <>
-                                {lab.result}
+                                {cleanResult(lab.result)}
                                 {lab.referenceMin &&
                                   lab.referenceMax &&
                                   !isNaN(parseFloat(lab.result)) && (
@@ -1457,9 +1616,7 @@ export default function PatientPage() {
                                 : lab.norma || "—")}
                           </Td>
                           <Td>
-                            <Badge colorScheme="purple">
-                              {lab.department || "—"}
-                            </Badge>
+                            <Badge colorScheme="purple">{lab.department}</Badge>
                           </Td>
                           <Td>
                             {lab.ready ? (
@@ -1958,14 +2115,19 @@ export default function PatientPage() {
                                   fontSize="sm"
                                   color="gray.600"
                                 >
-                                  <Badge colorScheme="blue">
-                                    {lab.testCode}
+                                  <Badge colorScheme="purple">
+                                    {lab.department}
                                   </Badge>
                                   <Text>
-                                    Результат: {lab.result || "—"}{" "}
+                                    Результат: {cleanResult(lab.result)}{" "}
                                     {lab.unit || ""}
                                   </Text>
-                                  {lab.isAbnormal && (
+                                  {checkAbnormal(
+                                    lab.result,
+                                    lab.referenceMin,
+                                    lab.referenceMax,
+                                    lab.referenceText
+                                  ) && (
                                     <Badge colorScheme="red">Отклонение</Badge>
                                   )}
                                 </HStack>

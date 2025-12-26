@@ -47,6 +47,16 @@ import Cookies from "js-cookie";
 import { getApiBaseUrl } from "../../utils/api";
 
 function RegisterPage() {
+  // Добавляем функцию капитализации в самом начале компонента, после импортов
+  const capitalizeString = (str) => {
+    if (!str) return str;
+    return str
+      .toLowerCase()
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
+
   const formRef = useRef({});
   const [sex, setSex] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -69,6 +79,18 @@ function RegisterPage() {
   const router = useRouter();
   const toast = useToast();
   const api = getApiBaseUrl();
+
+  // Добавляем состояние для полей формы для отображения в реальном времени
+  const [formFields, setFormFields] = useState({
+    surname: "",
+    name: "",
+    lastName: "",
+    addres: "",
+    work: "",
+    phoneNumber: "",
+    email: "",
+    dateBirth: "",
+  });
 
   const {
     isOpen: isLabOpen,
@@ -234,8 +256,45 @@ function RegisterPage() {
     }
   };
 
+  // Обновленная функция change с капитализацией
   const change = (e) => {
-    formRef.current[e.target.name] = e.target.value;
+    const { name, value, type, checked } = e.target;
+
+    // Для checkbox
+    if (type === "checkbox") {
+      formRef.current[name] = checked;
+      return;
+    }
+
+    // Для select
+    if (type === "select-one") {
+      formRef.current[name] = value;
+      return;
+    }
+
+    // Поля, которые нужно капитализировать
+    const fieldsToCapitalize = [
+      "surname",
+      "name",
+      "lastName",
+      "addres",
+      "work",
+    ];
+
+    if (fieldsToCapitalize.includes(name)) {
+      const capitalizedValue = capitalizeString(value);
+      formRef.current[name] = capitalizedValue;
+      setFormFields((prev) => ({
+        ...prev,
+        [name]: capitalizedValue,
+      }));
+    } else {
+      formRef.current[name] = value;
+      setFormFields((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
   };
 
   const handlePromoChange = (e) => {
@@ -658,37 +717,42 @@ function RegisterPage() {
                 <FormControl isRequired>
                   <FormLabel>Фамилия</FormLabel>
                   <Input
-                    textTransform={"capitalize"}
                     name="surname"
                     onChange={change}
                     placeholder="Иванов"
+                    value={formFields.surname}
                   />
                 </FormControl>
 
                 <FormControl isRequired>
                   <FormLabel>Имя</FormLabel>
                   <Input
-                    textTransform={"capitalize"}
                     name="name"
                     onChange={change}
                     placeholder="Иван"
+                    value={formFields.name}
                   />
                 </FormControl>
 
                 <FormControl>
                   <FormLabel>Отчество</FormLabel>
                   <Input
-                    textTransform={"capitalize"}
                     name="lastName"
                     onChange={change}
                     placeholder="Иванович"
+                    value={formFields.lastName}
                   />
                 </FormControl>
 
                 <HStack>
                   <FormControl>
                     <FormLabel>Дата рождения</FormLabel>
-                    <Input type="date" name="dateBirth" onChange={change} />
+                    <Input
+                      type="date"
+                      name="dateBirth"
+                      onChange={change}
+                      value={formFields.dateBirth}
+                    />
                   </FormControl>
 
                   <FormControl>
@@ -708,6 +772,7 @@ function RegisterPage() {
                     name="phoneNumber"
                     onChange={change}
                     placeholder="+998 90 123 45 67"
+                    value={formFields.phoneNumber}
                   />
                 </FormControl>
 
@@ -718,6 +783,7 @@ function RegisterPage() {
                     name="email"
                     onChange={change}
                     placeholder="patient@example.com"
+                    value={formFields.email}
                   />
                 </FormControl>
               </VStack>
@@ -726,15 +792,19 @@ function RegisterPage() {
                 <FormControl>
                   <FormLabel>Адрес</FormLabel>
                   <Input
-                    textTransform={"capitalize"}
                     name="addres"
                     onChange={change}
+                    value={formFields.addres}
                   />
                 </FormControl>
 
                 <FormControl>
                   <FormLabel>Место работы/учебы</FormLabel>
-                  <Input name="work" onChange={change} />
+                  <Input
+                    name="work"
+                    onChange={change}
+                    value={formFields.work}
+                  />
                 </FormControl>
 
                 <FormControl>
