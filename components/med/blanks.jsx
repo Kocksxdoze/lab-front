@@ -246,84 +246,178 @@ const BlanksPage = () => {
   };
 
   // Улучшенная функция вставки с сохранением стилей
+  // Улучшенная функция вставки с правильной обработкой таблиц
   const handlePaste = (e) => {
     e.preventDefault();
 
     const clipboardData = e.clipboardData || window.clipboardData;
-
-    // Пробуем получить HTML с сохранением стилей
     let htmlData = clipboardData.getData("text/html");
     const textData = clipboardData.getData("text/plain");
 
-    // Если есть HTML из Word/Excel, очищаем ненужные теги и стили
+    // Если есть HTML из Word/Excel
     if (htmlData) {
-      // Удаляем ненужные теги MS Word
-      htmlData = htmlData
-        .replace(/<o:p>.*?<\/o:p>/g, "")
-        .replace(/<meta[^>]*>/g, "")
-        .replace(/<style[^>]*>.*?<\/style>/g, "")
-        .replace(/class="[^"]*"/g, "")
-        .replace(/<[^>]*>/g, (tag) => {
-          // Сохраняем основные теги таблиц
-          if (
-            tag.match(/^<(table|tr|td|th|thead|tbody|caption|col|colgroup)/)
-          ) {
-            return tag.replace(/style="[^"]*"/g, (style) => {
-              // Сохраняем только нужные стили для таблиц
-              const styles = style.match(
-                /border|padding|margin|width|height|text-align|vertical-align|background-color|color/g
-              );
-              if (styles) {
-                return `style="${styles
-                  .map(
-                    (s) =>
-                      `${s}: ${style
-                        .match(new RegExp(`${s}:[^;]+`))?.[0]
-                        ?.split(":")[1]
-                        ?.trim()};`
-                  )
-                  .join("")}"`;
+      // Создаем временный контейнер для парсинга
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = htmlData;
+
+      // Проверяем, есть ли таблицы
+      const tables = tempDiv.querySelectorAll("table");
+
+      if (tables.length > 0) {
+        // Обрабатываем каждую таблицу
+        tables.forEach((table) => {
+          // Применяем стили для правильного отображения
+          table.style.borderCollapse = "collapse";
+          table.style.width = "100%";
+          table.style.margin = "15px 0";
+          table.style.fontSize = "12px";
+
+          // Обрабатываем ячейки
+          const rows = table.querySelectorAll("tr");
+          rows.forEach((row) => {
+            const cells = row.querySelectorAll("td, th");
+            cells.forEach((cell) => {
+              cell.style.border = "1px solid #000";
+              cell.style.padding = "8px";
+
+              // Для ячеек с результатами делаем желтый фон
+              if (cell.textContent.trim() === "") {
+                cell.style.backgroundColor = "#FFFFCC";
+                cell.setAttribute("contenteditable", "true");
               }
-              return "";
+
+              // Для заголовков делаем серый фон
+              if (cell.tagName === "TH") {
+                cell.style.backgroundColor = "#f0f0f0";
+                cell.style.fontWeight = "bold";
+                cell.style.textAlign = "center";
+              }
             });
-          }
-          // Для других тегов удаляем все стили
-          return tag.replace(/style="[^"]*"/g, "");
+          });
         });
 
-      // Вставляем очищенный HTML
-      document.execCommand("insertHTML", false, htmlData);
-    } else if (textData) {
-      // Если таблица из Excel/текста (разделена табуляцией)
+        // Вставляем обработанный HTML
+        const selection = window.getSelection();
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(tempDiv);
+      } else {
+        // Если нет таблиц, вставляем как есть с базовыми стилями
+        document.execCommand("insertHTML", false, htmlData);
+      }
+    }
+    // Если вставлен текст с табуляцией (из Excel)
+    else if (textData) {
       const lines = textData.split("\n").filter((line) => line.trim());
+
+      // Проверяем, есть ли табуляция (признак таблицы из Excel)
       const hasTabs = lines.some((line) => line.includes("\t"));
 
-      if (hasTabs) {
-        // Создаем таблицу с сохранением структуры
-        const rows = lines
-          .map((line) => {
-            const cells = line.split("\t");
-            return `<tr>${cells
-              .map((cell) => `<td>${cell}</td>`)
-              .join("")}</tr>`;
-          })
-          .join("");
+      if (hasTabs && lines.length > 1) {
+        // Создаем таблицу с правильной структурой
+        let tableHTML = `
+        <table style="border-collapse: collapse; width: 100%; margin: 15px 0; font-size: 12px;">
+          <tbody>
+      `;
 
-        const table = `
-          <table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
-            <tbody>
-              ${rows}
-            </tbody>
-          </table>
-        `;
-        document.execCommand("insertHTML", false, table);
+        lines.forEach((line, rowIndex) => {
+          const cells = line.split("\t");
+          tableHTML += "<tr>";
+
+          cells.forEach((cell, cellIndex) => {
+            const isHeaderRow = rowIndex === 0;
+            const isResultCell = cellIndex === 2; // Третий столбец для результатов
+
+            const tag = isHeaderRow ? "th" : "td";
+            const bgColor = isHeaderRow
+              ? "#f0f0f0"
+              : isResultCell
+              ? "#FFFFCC"
+              : "transparent";
+            const textAlign = isHeaderRow ? "center" : "left";
+            const fontWeight = isHeaderRow ? "bold" : "normal";
+
+            const content =
+              isResultCell && !isHeaderRow
+                ? `<span contenteditable="true">${cell}</span>`
+                : cell;
+
+            tableHTML += `
+            <${tag} style="
+              border: 1px solid #000;
+              padding: 8px;
+              background-color: ${bgColor};
+              text-align: ${textAlign};
+              font-weight: ${fontWeight};
+            ">
+              ${content}
+            </${tag}>
+          `;
+          });
+
+          tableHTML += "</tr>";
+        });
+
+        tableHTML += "</tbody></table>";
+
+        const selection = window.getSelection();
+        const range = selection.getRangeAt(0);
+        const div = document.createElement("div");
+        div.innerHTML = tableHTML;
+        range.deleteContents();
+        range.insertNode(div);
       } else {
-        // Обычный текст
+        // Обычный текст без таблицы
         document.execCommand("insertText", false, textData);
       }
     }
 
     updateContentFromEditor();
+  };
+
+  // Добавьте эту функцию в компонент BlanksPage
+  const fixExistingTables = () => {
+    if (contentEditableRef.current) {
+      const tables = contentEditableRef.current.querySelectorAll("table");
+
+      tables.forEach((table) => {
+        // Применяем базовые стили для всех таблиц
+        table.style.borderCollapse = "collapse";
+        table.style.width = "100%";
+        table.style.margin = "15px 0";
+        table.style.fontSize = "12px";
+
+        // Обрабатываем все ячейки
+        const cells = table.querySelectorAll("td, th");
+        cells.forEach((cell) => {
+          if (!cell.style.border || cell.style.border === "none") {
+            cell.style.border = "1px solid #000";
+          }
+
+          if (!cell.style.padding) {
+            cell.style.padding = "8px";
+          }
+
+          // Для пустых ячеек или ячеек с результатами
+          if (
+            cell.textContent.trim() === "" ||
+            cell.getAttribute("contenteditable") === "true"
+          ) {
+            cell.style.backgroundColor = "#FFFFCC";
+            cell.setAttribute("contenteditable", "true");
+          }
+
+          // Для заголовков
+          if (cell.tagName === "TH") {
+            cell.style.backgroundColor = "#f0f0f0";
+            cell.style.fontWeight = "bold";
+            cell.style.textAlign = "center";
+          }
+        });
+      });
+
+      updateContentFromEditor();
+    }
   };
 
   const updateContentFromEditor = () => {
@@ -343,35 +437,78 @@ const BlanksPage = () => {
 
   const insertTable = (rows = 3, cols = 5) => {
     let tableHTML = `
-      <table style="border-collapse: collapse; width: 100%; margin: 15px 0; font-size: 12px;">
-        <thead>
-          <tr style="background: #f0f0f0;">
-    `;
+    <table style="
+      border-collapse: collapse;
+      width: 100%;
+      margin: 15px 0;
+      font-size: 12px;
+      border: 2px solid #2B7EC1;
+    ">
+  `;
 
-    // Заголовки
-    for (let i = 1; i <= cols; i++) {
-      tableHTML += `<th style="border: 1px solid #000; padding: 8px; text-align: center; font-weight: bold;">Заголовок ${i}</th>`;
+    // Заголовок таблицы
+    tableHTML += `
+    <thead>
+      <tr style="background: linear-gradient(to right, #f0f0f0, #e0e0e0);">
+  `;
+
+    for (let i = 0; i < cols; i++) {
+      const headers = ["№", "Показатель", "Результат", "Ед. изм.", "Норма"];
+      const headerText = headers[i] || `Заголовок ${i + 1}`;
+
+      tableHTML += `
+      <th style="
+        border: 1px solid #000;
+        padding: 10px;
+        text-align: center;
+        font-weight: bold;
+        color: #2B7EC1;
+      ">
+        ${headerText}
+      </th>
+    `;
     }
 
     tableHTML += `</tr></thead><tbody>`;
 
-    // Строки
-    for (let i = 1; i <= rows; i++) {
+    // Строки данных
+    for (let i = 0; i < rows; i++) {
       tableHTML += `<tr>`;
-      for (let j = 1; j <= cols; j++) {
-        const isResultCell = j === 3; // Третий столбец для результатов
+
+      for (let j = 0; j < cols; j++) {
+        const isFirstCell = j === 0;
+        const isResultCell = j === 2;
+        const isLastCell = j === cols - 1;
+
+        let cellContent = "";
+        let align = "left";
+
+        if (isFirstCell) {
+          cellContent = (i + 1).toString();
+          align = "center";
+        } else if (isResultCell) {
+          cellContent =
+            '<span contenteditable="true" style="display: block; min-height: 24px;">&nbsp;</span>';
+        } else if (isLastCell) {
+          cellContent = "—";
+          align = "center";
+        } else {
+          cellContent = "Значение";
+        }
+
         tableHTML += `
-          <td style="border: 1px solid #000; padding: 8px; ${
-            isResultCell ? "background: #FFFFCC;" : ""
-          }">
-            ${
-              isResultCell
-                ? '<span contenteditable="true"> </span>'
-                : "Значение"
-            }
-          </td>
-        `;
+        <td style="
+          border: 1px solid #000;
+          padding: 8px;
+          text-align: ${align};
+          ${isResultCell ? "background-color: #FFFFCC;" : ""}
+          ${i % 2 === 0 ? "background-color: #f9f9f9;" : ""}
+        ">
+          ${cellContent}
+        </td>
+      `;
       }
+
       tableHTML += `</tr>`;
     }
 
@@ -991,6 +1128,14 @@ const BlanksPage = () => {
                           }}
                         >
                           Шаблон гематологии
+                        </Button>
+                        <Button
+                          size="sm"
+                          colorScheme="orange"
+                          onClick={fixExistingTables}
+                          leftIcon={<EditIcon />}
+                        >
+                          Исправить таблицы
                         </Button>
                       </HStack>
                     </Box>
