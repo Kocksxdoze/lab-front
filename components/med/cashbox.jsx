@@ -639,6 +639,8 @@ function Cashbox() {
       <Box overflowX="auto">
         <TableContainer
           minW="800px"
+          maxH="calc(100vh - 400px)" // Ограничиваем высоту
+          overflowY="auto" // Добавляем вертикальный скролл
           borderWidth="1px"
           borderRadius="md"
           borderColor="gray.200"

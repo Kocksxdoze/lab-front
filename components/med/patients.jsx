@@ -221,7 +221,13 @@ function Patients() {
       {loading ? (
         <Spinner size="xl" />
       ) : (
-        <TableContainer>
+        <TableContainer
+          maxH="calc(100vh - 300px)" // Ограничиваем высоту
+          overflowY="auto" // Добавляем вертикальный скролл
+          borderWidth="1px"
+          borderRadius="md"
+          borderColor="gray.200"
+        >
           <Table variant="striped" size="sm">
             <Thead bg="gray.100">
               <Tr>

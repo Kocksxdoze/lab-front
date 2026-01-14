@@ -724,7 +724,6 @@ export default function PatientPage() {
       }
     }
 
-    // Стандартная проверка числового диапазона
     if (referenceMin !== null && referenceMax !== null) {
       const min = parseFloat(referenceMin);
       const max = parseFloat(referenceMax);
@@ -740,41 +739,54 @@ export default function PatientPage() {
 
     return "";
   };
+  useEffect(() => {
+    if (labResults.length > 0) {
+      console.log("=== ДЕБАГ РЕЗУЛЬТАТОВ ===");
+      labResults.forEach((lab, index) => {
+        console.log(`${index + 1}. ${lab.name}:`);
+        console.log("  Результат из API:", lab.result);
+        console.log("  Тип результата:", typeof lab.result);
+        console.log("  cleanResult:", cleanResult(lab.result));
+        console.log("---");
+      });
+    }
+  }, [labResults]);
 
-  // Функция для очистки результата от лишних нулей
-  // Функция для очистки результата - СОХРАНЯЕМ дробную часть
+  // Используйте эту упрощенную cleanResult
   const cleanResult = (result) => {
-    if (!result) return "—";
+    console.log("Очистка результата:", result, "тип:", typeof result);
 
-    const resultStr = String(result).trim();
-
-    // Если содержит операторы < или >, оставляем как есть
-    if (resultStr.includes("<") || resultStr.includes(">")) {
-      return resultStr;
+    if (result == null || result === "") {
+      return "—";
     }
 
-    // Пробуем распарсить как число
-    const numResult = parseFloat(resultStr);
-    if (!isNaN(numResult)) {
-      // Сохраняем дробную часть, убирая только незначащие нули
-      if (Number.isInteger(numResult)) {
-        return numResult.toString(); // Целое число
-      } else {
-        // Сохраняем до 4 знаков после запятой, убирая незначащие нули
-        return parseFloat(numResult.toFixed(4)).toString();
-      }
+    // Если это число - просто возвращаем как есть
+    if (typeof result === "number") {
+      return result.toString();
     }
 
-    return resultStr;
+    // Если строка - обрабатываем
+    const str = String(result).trim();
+    console.log("После trim:", str);
+
+    // Если есть нецифровые символы (кроме операторов)
+    if (/[<>]/.test(str)) {
+      return str;
+    }
+
+    // Пытаемся распарсить число
+    const num = Number(str);
+    if (isNaN(num)) {
+      return str;
+    }
+
+    console.log("Числовое значение:", num);
+    return num.toString();
   };
-
-  // Функция для группировки анализов по категориям для лучшей организации
   const groupResultsByCategory = (results) => {
     const groups = {};
 
-    // Список тестов, которые должны быть вместе
     const relatedTests = {
-      // Печеночные пробы
       АЛТ: [
         "АСТ",
         "Билирубин общий",
@@ -793,11 +805,9 @@ export default function PatientPage() {
       "Билирубин прямой": ["Билирубин непрямой", "Билирубин общий"],
       "Билирубин непрямой": ["Билирубин прямой", "Билирубин общий"],
 
-      // Почечные пробы
       Креатинин: ["Мочевина", "Мочевая кислота"],
       Мочевина: ["Креатинин", "Мочевая кислота"],
 
-      // Липидный профиль
       "Холестерин общий": [
         "Холестерин ЛПВП",
         "Холестерин ЛПНП",
@@ -805,12 +815,10 @@ export default function PatientPage() {
       ],
       "Холестерин ЛПВП": ["Холестерин ЛПНП", "Холестерин общий"],
 
-      // Гормоны щитовидной железы
       ТТГ: ["Т3 свободный", "Т4 свободный"],
       "Т3 свободный": ["Т4 свободный", "ТТГ"],
       "Т4 свободный": ["Т3 свободный", "ТТГ"],
 
-      // Общий анализ крови
       Гемоглобин: ["Эритроциты", "Лейкоциты", "Тромбоциты", "Гематокрит"],
       Лейкоциты: [
         "Нейтрофилы",
@@ -821,18 +829,15 @@ export default function PatientPage() {
       ],
     };
 
-    // Сначала создаем группы для связанных тестов
     results.forEach((lab) => {
       const testName = lab.name.trim();
       let groupFound = false;
 
-      // Ищем, есть ли этот тест в списке связанных
       for (const [key, relatedList] of Object.entries(relatedTests)) {
         if (relatedList.includes(testName) || testName === key) {
           if (!groups[key]) {
             groups[key] = [];
           }
-          // Проверяем, нет ли уже этого теста в группе
           if (!groups[key].some((item) => item.name === lab.name)) {
             groups[key].push(lab);
           }
@@ -841,7 +846,6 @@ export default function PatientPage() {
         }
       }
 
-      // Если тест не связан с другими, создаем отдельную группу
       if (!groupFound) {
         groups[testName] = [lab];
       }
@@ -850,7 +854,6 @@ export default function PatientPage() {
     return groups;
   };
 
-  // Обновленная функция generatePrintContent с улучшенной группировкой
   const generatePrintContent = (results, blankResults) => {
     const fio = `${patientData.surname || ""} ${patientData.name || ""} ${
       patientData.lastName || ""
@@ -859,10 +862,8 @@ export default function PatientPage() {
     const age = calculateAge(patientData.dateBirth);
     const today = new Date().toLocaleDateString("ru-RU");
 
-    // Группируем результаты по связанным тестам
     const groupedResults = groupResultsByCategory(results);
 
-    // Группируем также по отделениям для заголовков
     const departmentGroups = results.reduce((acc, lab) => {
       const dept = lab.department || "Общие анализы";
       if (!acc[dept]) acc[dept] = [];
@@ -1378,7 +1379,7 @@ export default function PatientPage() {
                                 <th style="width: 40%;">Показатель</th>
                                 <th style="width: 15%;">Результат</th>
                                 <th style="width: 10%;">Ед. изм.</th>
-                                <th style="width: 20%;">Референтные значения</th>
+                                <th style="width: 20%;">Норма</th>
                                 <th style="width: 15%;">Метод</th>
                               </tr>
                             </thead>
@@ -1813,7 +1814,7 @@ export default function PatientPage() {
                         <Th>Название</Th>
                         <Th>Результат</Th>
                         <Th>Ед. изм.</Th>
-                        <Th>Референтные значения</Th>
+                        <Th>Норма</Th>
                         <Th>Отделение</Th>
                         <Th>Статус</Th>
                         <Th>Дата</Th>
@@ -2183,7 +2184,7 @@ export default function PatientPage() {
                                 <Text fontWeight="medium">{analysis.name}</Text>
                               </HStack>
                               <Text fontSize="sm" color="gray.600">
-                                🧪 {analysis.sampleType}
+                                {analysis.sampleType}
                               </Text>
                             </VStack>
                             <HStack>
@@ -2220,7 +2221,7 @@ export default function PatientPage() {
                                 <Text fontWeight="medium">{blank.name}</Text>
                               </HStack>
                               <Text fontSize="sm" color="gray.600">
-                                🧪 {blank.sampleType}
+                                {blank.sampleType}
                               </Text>
                             </VStack>
                             <HStack>
