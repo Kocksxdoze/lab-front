@@ -249,7 +249,6 @@ export default function PatientPage() {
     const filteredLabs = labCategories.filter((category) => {
       const searchText = `
         ${category.name?.toLowerCase() || ""}
-        ${category.code?.toLowerCase() || ""}
         ${category.department?.toLowerCase() || ""}
         ${category.description?.toLowerCase() || ""}
       `;
@@ -743,6 +742,7 @@ export default function PatientPage() {
   };
 
   // Функция для очистки результата от лишних нулей
+  // Функция для очистки результата - СОХРАНЯЕМ дробную часть
   const cleanResult = (result) => {
     if (!result) return "—";
 
@@ -756,13 +756,101 @@ export default function PatientPage() {
     // Пробуем распарсить как число
     const numResult = parseFloat(resultStr);
     if (!isNaN(numResult)) {
-      // Убираем лишние нули, но сохраняем до 2 значащих цифр после запятой
-      return numResult.toString();
+      // Сохраняем дробную часть, убирая только незначащие нули
+      if (Number.isInteger(numResult)) {
+        return numResult.toString(); // Целое число
+      } else {
+        // Сохраняем до 4 знаков после запятой, убирая незначащие нули
+        return parseFloat(numResult.toFixed(4)).toString();
+      }
     }
 
     return resultStr;
   };
 
+  // Функция для группировки анализов по категориям для лучшей организации
+  const groupResultsByCategory = (results) => {
+    const groups = {};
+
+    // Список тестов, которые должны быть вместе
+    const relatedTests = {
+      // Печеночные пробы
+      АЛТ: [
+        "АСТ",
+        "Билирубин общий",
+        "Билирубин прямой",
+        "Билирубин непрямой",
+        "Щелочная фосфатаза",
+        "ГГТ",
+      ],
+      АСТ: ["АЛТ", "Билирубин общий", "Билирубин прямой", "Билирубин непрямой"],
+      "Билирубин общий": [
+        "Билирубин прямой",
+        "Билирубин непрямой",
+        "АЛТ",
+        "АСТ",
+      ],
+      "Билирубин прямой": ["Билирубин непрямой", "Билирубин общий"],
+      "Билирубин непрямой": ["Билирубин прямой", "Билирубин общий"],
+
+      // Почечные пробы
+      Креатинин: ["Мочевина", "Мочевая кислота"],
+      Мочевина: ["Креатинин", "Мочевая кислота"],
+
+      // Липидный профиль
+      "Холестерин общий": [
+        "Холестерин ЛПВП",
+        "Холестерин ЛПНП",
+        "Триглицериды",
+      ],
+      "Холестерин ЛПВП": ["Холестерин ЛПНП", "Холестерин общий"],
+
+      // Гормоны щитовидной железы
+      ТТГ: ["Т3 свободный", "Т4 свободный"],
+      "Т3 свободный": ["Т4 свободный", "ТТГ"],
+      "Т4 свободный": ["Т3 свободный", "ТТГ"],
+
+      // Общий анализ крови
+      Гемоглобин: ["Эритроциты", "Лейкоциты", "Тромбоциты", "Гематокрит"],
+      Лейкоциты: [
+        "Нейтрофилы",
+        "Лимфоциты",
+        "Моноциты",
+        "Эозинофилы",
+        "Базофилы",
+      ],
+    };
+
+    // Сначала создаем группы для связанных тестов
+    results.forEach((lab) => {
+      const testName = lab.name.trim();
+      let groupFound = false;
+
+      // Ищем, есть ли этот тест в списке связанных
+      for (const [key, relatedList] of Object.entries(relatedTests)) {
+        if (relatedList.includes(testName) || testName === key) {
+          if (!groups[key]) {
+            groups[key] = [];
+          }
+          // Проверяем, нет ли уже этого теста в группе
+          if (!groups[key].some((item) => item.name === lab.name)) {
+            groups[key].push(lab);
+          }
+          groupFound = true;
+          break;
+        }
+      }
+
+      // Если тест не связан с другими, создаем отдельную группу
+      if (!groupFound) {
+        groups[testName] = [lab];
+      }
+    });
+
+    return groups;
+  };
+
+  // Обновленная функция generatePrintContent с улучшенной группировкой
   const generatePrintContent = (results, blankResults) => {
     const fio = `${patientData.surname || ""} ${patientData.name || ""} ${
       patientData.lastName || ""
@@ -771,8 +859,11 @@ export default function PatientPage() {
     const age = calculateAge(patientData.dateBirth);
     const today = new Date().toLocaleDateString("ru-RU");
 
-    // Группируем обычные анализы по отделениям
-    const groupedResults = results.reduce((acc, lab) => {
+    // Группируем результаты по связанным тестам
+    const groupedResults = groupResultsByCategory(results);
+
+    // Группируем также по отделениям для заголовков
+    const departmentGroups = results.reduce((acc, lab) => {
       const dept = lab.department || "Общие анализы";
       if (!acc[dept]) acc[dept] = [];
       acc[dept].push(lab);
@@ -935,10 +1026,11 @@ export default function PatientPage() {
       font-size: 11px;
       font-weight: bold;
       color: #2B7EC1;
-      margin: 15px 0 8px 0;
-      padding: 4px 8px;
-      background: #F0F0F0;
-      border-left: 3px solid #2B7EC1;
+      margin: 20px 0 10px 0;
+      padding: 6px 10px;
+      background: linear-gradient(to right, #F0F0F0, #FFFFFF);
+      border-left: 4px solid #2B7EC1;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     
     .results-table {
@@ -946,39 +1038,46 @@ export default function PatientPage() {
       border-collapse: collapse;
       margin-bottom: 15px;
       font-size: 9px;
+      border: 1px solid #DDD;
     }
     
     .results-table th {
-      background: #F0F0F0;
-      border: 1px solid #000;
-      padding: 5px;
+      background: #F8F9FA;
+      border: 1px solid #CCC;
+      padding: 7px 5px;
       text-align: center;
       font-weight: bold;
       font-size: 9px;
+      color: #2B7EC1;
     }
     
     .results-table td {
-      border: 1px solid #000;
-      padding: 5px;
+      border: 1px solid #DDD;
+      padding: 6px 5px;
       vertical-align: middle;
     }
     
     .test-name {
-      font-weight: bold;
-      font-size: 9px;
+      font-weight: 500;
+      font-size: 9.5px;
+      padding-left: 8px !important;
     }
     
     .result-value {
       text-align: center;
       font-weight: bold;
-      font-size: 10px;
+      font-size: 10.5px;
+      font-family: 'Courier New', monospace;
+      padding: 6px 3px !important;
     }
 
     .arrow {
       display: inline-block;
       margin-left: 4px;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: bold;
+      position: relative;
+      top: 1px;
     }
 
     .arrow-up {
@@ -992,16 +1091,21 @@ export default function PatientPage() {
     .unit {
       text-align: center;
       font-size: 9px;
+      color: #666;
+      padding: 6px 3px !important;
     }
     
     .reference {
-      font-size: 8px;
-      color: #666;
+      font-size: 9px;
+      color: #444;
       text-align: center;
+      padding: 6px 3px !important;
+      font-family: 'Arial', sans-serif;
     }
     
     .abnormal {
-      background-color: #FFE8E8 !important;
+      background-color: #FFF5F5 !important;
+      border-left: 3px solid #D32F2F !important;
     }
     
     .result-abnormal {
@@ -1048,6 +1152,9 @@ export default function PatientPage() {
       font-size: 8px;
       color: #FF9800;
       font-style: italic;
+      padding: 8px;
+      background: #FFF8E1;
+      border-radius: 4px;
     }
     
     .document-footer {
@@ -1068,24 +1175,27 @@ export default function PatientPage() {
     
     .conclusion-section {
       margin-top: 15px;
-      padding: 8px;
-      background: #F5F5F5;
+      padding: 10px;
+      background: #F5F9FF;
       border-left: 3px solid #2B7EC1;
+      border-radius: 0 4px 4px 0;
     }
     
     .conclusion-title {
       font-weight: bold;
       font-size: 10px;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
+      color: #2B7EC1;
     }
     
     .conclusion-text {
-      font-size: 9px;
+      font-size: 9.5px;
       line-height: 1.4;
+      color: #333;
     }
 
     .blank-section {
-      margin: 20px 0;
+      margin: 25px 0;
       page-break-inside: avoid;
     }
 
@@ -1094,31 +1204,71 @@ export default function PatientPage() {
       font-weight: bold;
       color: #2B7EC1;
       margin-bottom: 12px;
-      padding: 6px 8px;
-      background: #F0F0F0;
-      border-left: 3px solid #2B7EC1;
+      padding: 8px 12px;
+      background: linear-gradient(to right, #F0F0F0, #FFFFFF);
+      border-left: 4px solid #2B7EC1;
     }
 
     .blank-content {
-      margin: 12px 0;
+      margin: 15px 0;
+      padding: 10px;
+      border: 1px solid #E0E0E0;
+      border-radius: 4px;
+      background: #FAFAFA;
     }
 
     .blank-content table {
       width: 100%;
       border-collapse: collapse;
-      margin: 8px 0;
+      margin: 10px 0;
     }
 
     .blank-content table th,
     .blank-content table td {
       border: 1px solid #000;
-      padding: 6px;
-      font-size: 9px;
+      padding: 8px;
+      font-size: 9.5px;
     }
 
     .blank-content table th {
       background: #F0F0F0;
       font-weight: bold;
+      color: #2B7EC1;
+    }
+
+    .test-group-header {
+      background: #F0F8FF !important;
+      font-weight: bold !important;
+      color: #2B7EC1 !important;
+      border-bottom: 2px solid #2B7EC1 !important;
+    }
+
+    .test-group-spacer {
+      height: 5px;
+      background: #FAFAFA;
+    }
+
+    .related-tests-group {
+      margin-bottom: 20px;
+      border: 1px solid #E0E0E0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .related-tests-title {
+      background: linear-gradient(to right, #2B7EC1, #4A90E2);
+      color: white;
+      padding: 8px 12px;
+      font-size: 10.5px;
+      font-weight: bold;
+      margin: 0;
+    }
+
+    .test-code {
+      font-size: 8px;
+      color: #666;
+      font-family: 'Courier New', monospace;
+      margin-top: 2px;
     }
     
     @media print {
@@ -1133,6 +1283,21 @@ export default function PatientPage() {
       
       .watermark {
         position: fixed !important;
+      }
+
+      .results-table th {
+        background: #F8F9FA !important;
+        -webkit-print-color-adjust: exact;
+      }
+
+      .abnormal {
+        background-color: #FFF5F5 !important;
+        -webkit-print-color-adjust: exact;
+      }
+
+      .test-group-header {
+        background: #F0F8FF !important;
+        -webkit-print-color-adjust: exact;
       }
     }
   </style>
@@ -1192,99 +1357,208 @@ export default function PatientPage() {
       <div class="results-section">
         <div class="results-title">РЕЗУЛЬТАТЫ ЛАБОРАТОРНЫХ ИССЛЕДОВАНИЙ</div>
         
-        ${Object.entries(groupedResults)
-          .map(
-            ([department, deptResults]) => `
-          <div class="department-title">${department}</div>
-          <table class="results-table">
-            <thead>
-              <tr>
-                <th style="width: 35%;">Показатель</th>
-                <th style="width: 15%;">Результат</th>
-                <th style="width: 12%;">Ед. изм.</th>
-                <th style="width: 18%;">Референтные значения</th>
-                <th style="width: 20%;">Метод</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${deptResults
-                .map((lab) => {
-                  let referenceDisplay = "—";
-                  if (lab.referenceText) {
-                    referenceDisplay = lab.referenceText;
-                  } else if (
-                    lab.referenceMin !== null &&
-                    lab.referenceMax !== null
-                  ) {
-                    referenceDisplay = `${lab.referenceMin} - ${lab.referenceMax}`;
-                  } else if (lab.norma) {
-                    referenceDisplay = lab.norma;
-                  }
+        ${Object.entries(departmentGroups)
+          .map(([department, deptResults]) => {
+            // Группируем тесты внутри отделения
+            const groupedDeptResults = groupResultsByCategory(deptResults);
 
-                  // Очищаем результат от лишних нулей
-                  const cleanedResult = cleanResult(lab.result);
+            return `
+                <div class="department-title">${department}</div>
+                
+                ${Object.entries(groupedDeptResults)
+                  .map(([groupName, groupTests]) => {
+                    // Если в группе несколько тестов - это связанные тесты
+                    if (groupTests.length > 1) {
+                      return `
+                        <div class="related-tests-group">
+                          <div class="related-tests-title">${groupName} и связанные показатели</div>
+                          <table class="results-table">
+                            <thead>
+                              <tr>
+                                <th style="width: 40%;">Показатель</th>
+                                <th style="width: 15%;">Результат</th>
+                                <th style="width: 10%;">Ед. изм.</th>
+                                <th style="width: 20%;">Референтные значения</th>
+                                <th style="width: 15%;">Метод</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              ${groupTests
+                                .map((lab) => {
+                                  let referenceDisplay = "—";
+                                  if (lab.referenceText) {
+                                    referenceDisplay = lab.referenceText;
+                                  } else if (
+                                    lab.referenceMin !== null &&
+                                    lab.referenceMax !== null
+                                  ) {
+                                    const min = parseFloat(lab.referenceMin);
+                                    const max = parseFloat(lab.referenceMax);
+                                    if (!isNaN(min) && !isNaN(max)) {
+                                      referenceDisplay = `${min} - ${max}`;
+                                    }
+                                  } else if (lab.norma) {
+                                    referenceDisplay = lab.norma;
+                                  }
 
-                  // Определяем стрелку отклонения
-                  const arrow = getArrow(
-                    lab.result,
-                    lab.referenceMin,
-                    lab.referenceMax,
-                    lab.referenceText
-                  );
+                                  // Очищаем результат (сохраняем дробную часть)
+                                  const cleanedResult = cleanResult(lab.result);
 
-                  // Проверяем отклонение
-                  const isAbnormal = checkAbnormal(
-                    lab.result,
-                    lab.referenceMin,
-                    lab.referenceMax,
-                    lab.referenceText
-                  );
+                                  // Определяем стрелку отклонения
+                                  const arrow = getArrow(
+                                    lab.result,
+                                    lab.referenceMin,
+                                    lab.referenceMax,
+                                    lab.referenceText
+                                  );
 
-                  return `
-                    <tr${isAbnormal ? ' class="abnormal"' : ""}>
-                      <td class="test-name">
-                        ${lab.name}
-                      </td>
-                      <td class="result-value${
-                        isAbnormal ? " result-abnormal" : ""
-                      }">
-                        ${cleanedResult}${arrow}
-                      </td>
-                      <td class="unit">${lab.unit || "—"}</td>
-                      <td class="reference">${referenceDisplay}</td>
-                      <td style="font-size: 9px; text-align: center;">
-                        ${lab.department || "—"}
-                        ${
-                          lab.method
-                            ? `<br><span style="font-size: 8px; color: #666;">${lab.method}</span>`
-                            : ""
+                                  // Проверяем отклонение
+                                  const isAbnormal = checkAbnormal(
+                                    lab.result,
+                                    lab.referenceMin,
+                                    lab.referenceMax,
+                                    lab.referenceText
+                                  );
+
+                                  return `
+                                    <tr${isAbnormal ? ' class="abnormal"' : ""}>
+                                      <td class="test-name">
+                                        <div>${lab.name}</div>
+                                        ${
+                                          lab.testCode
+                                            ? `<div class="test-code">${lab.testCode}</div>`
+                                            : ""
+                                        }
+                                      </td>
+                                      <td class="result-value${
+                                        isAbnormal ? " result-abnormal" : ""
+                                      }">
+                                        ${cleanedResult}${arrow}
+                                      </td>
+                                      <td class="unit">${lab.unit || "—"}</td>
+                                      <td class="reference">${referenceDisplay}</td>
+                                      <td style="font-size: 9px; text-align: center;">
+                                        ${lab.method || "—"}
+                                      </td>
+                                    </tr>
+                                    ${
+                                      lab.conclusion
+                                        ? `
+                                    <tr>
+                                      <td colspan="5" style="padding: 8px; background: #F5F9FF;">
+                                        <div class="conclusion-title">Заключение врача-лаборанта:</div>
+                                        <div class="conclusion-text">${
+                                          lab.conclusion
+                                        }</div>
+                                        ${
+                                          lab.executedBy
+                                            ? `<div class="method-info" style="margin-top: 4px;">Исполнитель: ${lab.executedBy}</div>`
+                                            : ""
+                                        }
+                                      </td>
+                                    </tr>
+                                    `
+                                        : ""
+                                    }
+                                  `;
+                                })
+                                .join("")}
+                            </tbody>
+                          </table>
+                        </div>
+                      `;
+                    } else {
+                      // Одиночные тесты
+                      const lab = groupTests[0];
+                      let referenceDisplay = "—";
+                      if (lab.referenceText) {
+                        referenceDisplay = lab.referenceText;
+                      } else if (
+                        lab.referenceMin !== null &&
+                        lab.referenceMax !== null
+                      ) {
+                        const min = parseFloat(lab.referenceMin);
+                        const max = parseFloat(lab.referenceMax);
+                        if (!isNaN(min) && !isNaN(max)) {
+                          referenceDisplay = `${min} - ${max}`;
                         }
-                      </td>
-                    </tr>
-                    ${
-                      lab.conclusion
-                        ? `
-                    <tr>
-                      <td colspan="5" style="padding: 6px; background: #F9F9F9;">
-                        <div class="conclusion-title">Заключение врача-лаборанта:</div>
-                        <div class="conclusion-text">${lab.conclusion}</div>
-                        ${
-                          lab.executedBy
-                            ? `<div class="method-info" style="margin-top: 4px;">Исполнитель: ${lab.executedBy}</div>`
-                            : ""
-                        }
-                      </td>
-                    </tr>
-                    `
-                        : ""
+                      } else if (lab.norma) {
+                        referenceDisplay = lab.norma;
+                      }
+
+                      const cleanedResult = cleanResult(lab.result);
+                      const arrow = getArrow(
+                        lab.result,
+                        lab.referenceMin,
+                        lab.referenceMax,
+                        lab.referenceText
+                      );
+                      const isAbnormal = checkAbnormal(
+                        lab.result,
+                        lab.referenceMin,
+                        lab.referenceMax,
+                        lab.referenceText
+                      );
+
+                      return `
+                        <table class="results-table" style="margin-bottom: 15px;">
+                          <thead>
+                            <tr>
+                              <th style="width: 40%;">Показатель</th>
+                              <th style="width: 15%;">Результат</th>
+                              <th style="width: 10%;">Ед. изм.</th>
+                              <th style="width: 20%;">Референтные значения</th>
+                              <th style="width: 15%;">Метод</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr${isAbnormal ? ' class="abnormal"' : ""}>
+                              <td class="test-name">
+                                <div>${lab.name}</div>
+                                ${
+                                  lab.testCode
+                                    ? `<div class="test-code">${lab.testCode}</div>`
+                                    : ""
+                                }
+                              </td>
+                              <td class="result-value${
+                                isAbnormal ? " result-abnormal" : ""
+                              }">
+                                ${cleanedResult}${arrow}
+                              </td>
+                              <td class="unit">${lab.unit || "—"}</td>
+                              <td class="reference">${referenceDisplay}</td>
+                              <td style="font-size: 9px; text-align: center;">
+                                ${lab.method || "—"}
+                              </td>
+                            </tr>
+                            ${
+                              lab.conclusion
+                                ? `
+                            <tr>
+                              <td colspan="5" style="padding: 8px; background: #F5F9FF;">
+                                <div class="conclusion-title">Заключение врача-лаборанта:</div>
+                                <div class="conclusion-text">${
+                                  lab.conclusion
+                                }</div>
+                                ${
+                                  lab.executedBy
+                                    ? `<div class="method-info" style="margin-top: 4px;">Исполнитель: ${lab.executedBy}</div>`
+                                    : ""
+                                }
+                              </td>
+                            </tr>
+                            `
+                                : ""
+                            }
+                          </tbody>
+                        </table>
+                      `;
                     }
-                  `;
-                })
-                .join("")}
-            </tbody>
-          </table>
-        `
-          )
+                  })
+                  .join("")}
+              `;
+          })
           .join("")}
       </div>
       `
@@ -1332,11 +1606,11 @@ export default function PatientPage() {
       }
       
       <div class="barcode">
-        <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjUwIiBoZWlnaHQ9IjUwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iNCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSI4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEzIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE2IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjIwIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjI0IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjI5IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjMyIiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjM2IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQwIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQ1IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQ4IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjUyIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjU2IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjYxIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjY0IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjY4IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjcyIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijc3IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjgwIiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijg0IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijg4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjkzIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijk2IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEwMCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMDQiIHk9IjAiIHdpZHRoPSIzIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTA5IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjExMiIgeT0iMCIgd2lkdGg9IjIiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMTYiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTIwIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEyNSIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMjgiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTMyIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEzNiIgeT0iMCIgd2lkdGg9IjMiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNDEiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTQ0IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE0OCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNTIiIHk9IjAiIHdpZHRoPSIzIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTU3IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE2MCIgeT0iMCIgd2lkdGg9IjIiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNjQiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTY4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE3MyIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNzYiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTgwIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE4NCIgeT0iMCIgd2lkdGg9IjMiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxODkiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTkyIiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjx0ZXh0IHg9IjEyNSIgeT0iNDgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSI4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj4yNDE2MjAyNC01MTAwMTkyNS0yMDI0MTIwPC90ZXh0Pjwvc3ZnPg==" alt="Barcode">
+        <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjUwIiBoZWlnaHQ9IjUwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iNCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSI4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEzIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE2IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjIwIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjI0IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjI5IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjMyIiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjM2IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQwIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQ1IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQ4IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjUyIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjU2IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjYxIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjY0IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjY4IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjcyIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijc3IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjgwIiB5PSIwIiB3aWR0aD0iMiIgaGVpZht0PSI0MCIvPjxyZWN0IHg9Ijg0IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijg4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjkzIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijk2IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEwMCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMDQiIHk9IjAiIHdpZHRoPSIzIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTA5IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjExMiIgeT0iMCIgd2lkdGg9IjIiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMTYiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTIwIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEyNSIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMjgiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTMyIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEzNiIgeT0iMCIgd2lkdGg9IjMiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNDEiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTQ0IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE0OCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNTIiIHk9IjAiIHdpZHRoPSIzIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTU3IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE2MCIgeT0iMCIgd2lkdGg9IjIiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNjQiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTY4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE3MyIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNzYiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTgwIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE4NCIgeT0iMCIgd2lkdGgPSIzIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTg5IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE5MiIgeT0iMCIgd2lkdGg9IjIiIGhlaWdodD0iNDAiLz48dGV4dCB4PSIxMjUiIHk9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iOCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+MjQxNjIwMjQtNTEwMDE5MjUtMjAyNDEyMDwvdGV4dD48L3N2Zz4=" alt="Barcode">
       </div>
       
       <div class="disclaimer">
-        Результаты исследований не являются диагнозом, необходима консультация специалиста.
+         Результаты исследований не являются диагнозом, необходима консультация специалиста.
       </div>
       
       <div class="document-footer">
