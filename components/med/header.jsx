@@ -32,13 +32,57 @@ function Header() {
   const toast = useToast();
   const [reports, setReports] = useState([]);
   const api = getApiBaseUrl();
-  const token = Cookies.get("token");
-  const decoded = jwt.decode(token);
-  const role = decoded?.role;
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredClients, setFilteredClients] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [role, setRole] = useState(null);
+  const [isTokenValid, setIsTokenValid] = useState(true);
   const searchRef = useRef(null);
+
+  // Проверка токена
+  useEffect(() => {
+    const checkToken = () => {
+      const token = Cookies.get("token");
+      if (!token) {
+        setIsTokenValid(false);
+        setRole(null);
+        return;
+      }
+
+      try {
+        const decoded = jwt.decode(token);
+        if (!decoded) {
+          setIsTokenValid(false);
+          setRole(null);
+          return;
+        }
+
+        // Проверяем срок действия токена
+        const currentTime = Date.now() / 1000;
+        if (decoded.exp && decoded.exp < currentTime) {
+          // Токен истек, но не делаем авто-логаут
+          setIsTokenValid(false);
+          setRole(decoded.role); // Сохраняем роль для отображения навигации
+        } else {
+          // Токен валиден
+          setIsTokenValid(true);
+          setRole(decoded.role);
+        }
+      } catch (error) {
+        console.error("Error decoding token:", error);
+        setIsTokenValid(false);
+        setRole(null);
+      }
+    };
+
+    // Проверяем токен при загрузке
+    checkToken();
+
+    // Периодически проверяем токен (каждую минуту)
+    const tokenCheckInterval = setInterval(checkToken, 60000);
+
+    return () => clearInterval(tokenCheckInterval);
+  }, []);
 
   const handleSearch = (e) => {
     if (e.key === "Enter" && searchQuery.trim()) {
@@ -115,16 +159,20 @@ function Header() {
 
   useEffect(() => {
     const fetchReports = async () => {
-      const response = await fetch(`${api}/reports`);
-      const data = await response.json();
-      if (response.ok) {
-        setReports(data);
+      try {
+        const response = await fetch(`${api}/reports`);
+        if (response.ok) {
+          const data = await response.json();
+          setReports(data);
+        }
+      } catch (error) {
+        console.error("Error fetching reports:", error);
       }
     };
     fetchReports();
-  }, []);
+  }, [api]);
 
-  const clients = async () => {
+  const fetchClients = async () => {
     try {
       const response = await fetch(`${api}/clients`);
       const data = await response.json();
@@ -154,12 +202,74 @@ function Header() {
   };
 
   useEffect(() => {
-    clients();
-  }, []);
+    fetchClients();
+  }, [api, toast]);
 
   const logout = () => {
+    Cookies.remove("token");
     router.push("/auth");
   };
+
+  // Функция для обновления токена
+  const refreshToken = async () => {
+    try {
+      const token = Cookies.get("token");
+      if (!token) return;
+
+      const response = await fetch(`${api}/auth/refresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        Cookies.set("token", data.token, { expires: 1 }); // 1 день
+        const decoded = jwt.decode(data.token);
+        setRole(decoded?.role);
+        setIsTokenValid(true);
+
+        toast({
+          title: "Сессия обновлена",
+          status: "success",
+          duration: 3000,
+          position: "bottom-right",
+        });
+      }
+    } catch (error) {
+      console.error("Error refreshing token:", error);
+    }
+  };
+
+  // Проверяем токен перед каждым запросом
+  useEffect(() => {
+    const requestInterceptor = async (url, options = {}) => {
+      const token = Cookies.get("token");
+
+      if (token) {
+        const decoded = jwt.decode(token);
+        const currentTime = Date.now() / 1000;
+
+        // Если токен истекает в течение 5 минут, пытаемся обновить
+        if (decoded.exp && decoded.exp - currentTime < 300) {
+          await refreshToken();
+        }
+
+        // Добавляем токен к запросу
+        options.headers = {
+          ...options.headers,
+          Authorization: `Bearer ${token}`,
+        };
+      }
+
+      return { url, options };
+    };
+
+    // Здесь можно добавить логику для перехвата всех fetch запросов
+    // или использовать axios interceptor если используете axios
+  }, [api]);
 
   // Check if user has access to a specific role
   const hasAccess = (allowedRoles) => {

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   Box,
   Flex,
@@ -41,10 +41,94 @@ import {
   Tab,
   TabPanel,
 } from "@chakra-ui/react";
-import { DeleteIcon, InfoIcon, SearchIcon } from "@chakra-ui/icons";
+import {
+  DeleteIcon,
+  InfoIcon,
+  SearchIcon,
+  CheckIcon,
+  AddIcon,
+} from "@chakra-ui/icons";
 import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
 import { getApiBaseUrl } from "../../utils/api";
+
+const AnalysisCard = ({ category, isSelected, onSelect }) => {
+  const price = category.basePrice || category.sum || 0;
+
+  return (
+    <Card
+      variant="outline"
+      borderWidth="2px"
+      borderColor={isSelected ? "blue.500" : "gray.200"}
+      bg={isSelected ? "blue.50" : "white"}
+      _hover={{
+        borderColor: isSelected ? "blue.500" : "blue.300",
+        shadow: "md",
+      }}
+      transition="all 0.2s"
+    >
+      <CardBody>
+        <VStack align="stretch" spacing={3}>
+          <HStack justify="space-between">
+            <HStack spacing={2}>
+              <Badge colorScheme="blue" fontSize="xs">
+                {category.code || category.id}
+              </Badge>
+              {category.department && (
+                <Badge colorScheme="purple" fontSize="xs">
+                  {category.department}
+                </Badge>
+              )}
+            </HStack>
+            {category.sampleType && (
+              <Badge colorScheme="gray" fontSize="xs">
+                🧪 {category.sampleType}
+              </Badge>
+            )}
+          </HStack>
+
+          <Text fontWeight="bold" fontSize="lg" minH="3rem">
+            {category.name}
+          </Text>
+
+          {category.description && (
+            <Text fontSize="sm" color="gray.600" noOfLines={2}>
+              {category.description}
+            </Text>
+          )}
+
+          {category.executionTime && (
+            <HStack>
+              <Text fontSize="xs" color="gray.500">
+                ⏱️ Срок:
+              </Text>
+              <Text fontSize="xs" fontWeight="medium">
+                {category.executionTime}
+              </Text>
+            </HStack>
+          )}
+
+          <Divider />
+
+          <HStack justify="space-between">
+            <Text fontSize="xl" fontWeight="bold" color="green.600">
+              {parseInt(price).toLocaleString()} сум
+            </Text>
+            <Button
+              size="sm"
+              colorScheme={isSelected ? "green" : "blue"}
+              onClick={() => onSelect(category)}
+              isDisabled={isSelected}
+              leftIcon={isSelected ? <CheckIcon /> : <AddIcon />}
+            >
+              {isSelected ? "Добавлено" : "Добавить"}
+            </Button>
+          </HStack>
+        </VStack>
+      </CardBody>
+    </Card>
+  );
+};
 
 function RegisterPage() {
   // Добавляем функцию капитализации в самом начале компонента, после импортов
@@ -75,6 +159,9 @@ function RegisterPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
+  const [modalSearchTerm, setModalSearchTerm] = useState("");
+  const [modalSearchSuggestions, setModalSearchSuggestions] = useState([]);
   const searchInputRef = useRef(null);
   const router = useRouter();
   const toast = useToast();
@@ -186,6 +273,61 @@ function RegisterPage() {
     };
     fetchInitialData();
   }, []);
+
+  const filteredLabCategories = useMemo(() => {
+    let filtered = labCategories.filter((cat) => cat.isActive !== false);
+
+    if (selectedDepartment) {
+      filtered = filtered.filter(
+        (cat) => cat.department === selectedDepartment
+      );
+    }
+
+    if (modalSearchTerm) {
+      const expandedQuery = expandMedicalTerms(modalSearchTerm);
+      const terms = expandedQuery
+        .split(/\s+/)
+        .filter((term) => term.length > 0);
+
+      filtered = filtered.filter((category) => {
+        const searchText = `
+          ${category.name?.toLowerCase() || ""}
+          ${category.code?.toLowerCase() || ""}
+          ${category.department?.toLowerCase() || ""}
+          ${category.description?.toLowerCase() || ""}
+        `;
+        return terms.every((term) => searchText.includes(term));
+      });
+    }
+
+    return filtered;
+  }, [labCategories, selectedDepartment, modalSearchTerm]);
+
+  // Поиск в модальном окне
+  useEffect(() => {
+    if (modalSearchTerm && modalSearchTerm.length >= 2) {
+      const expandedQuery = expandMedicalTerms(modalSearchTerm);
+      const terms = expandedQuery
+        .split(/\s+/)
+        .filter((term) => term.length > 0);
+
+      const suggestions = labCategories
+        .filter((category) => {
+          const searchText = `
+            ${category.name?.toLowerCase() || ""}
+            ${category.code?.toLowerCase() || ""}
+            ${category.department?.toLowerCase() || ""}
+            ${category.description?.toLowerCase() || ""}
+          `;
+          return terms.every((term) => searchText.includes(term));
+        })
+        .slice(0, 5);
+
+      setModalSearchSuggestions(suggestions);
+    } else {
+      setModalSearchSuggestions([]);
+    }
+  }, [modalSearchTerm, labCategories]);
 
   const expandMedicalTerms = (query) => {
     let expandedQuery = query.toLowerCase();
@@ -1083,22 +1225,39 @@ function RegisterPage() {
                     <option value="terminal">📱 Терминал</option>
                   </Select>
                 </FormControl>
-
                 <FormControl>
                   <FormLabel>Оплачено сейчас</FormLabel>
                   <Input
                     type="number"
-                    value={paidAmount}
-                    onChange={(e) =>
-                      setPaidAmount(parseFloat(e.target.value) || 0)
-                    }
+                    value={paidAmount || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === "") {
+                        setPaidAmount(0);
+                      } else {
+                        const numValue = parseFloat(value);
+                        setPaidAmount(isNaN(numValue) ? 0 : numValue);
+                      }
+                    }}
                     placeholder="0"
                   />
                 </FormControl>
 
                 <Button
                   colorScheme="teal"
-                  onClick={() => setPaidAmount(finalAmount)}
+                  onClick={() => {
+                    setPaidAmount(finalAmount);
+                    // Фокус на поле оплаты после установки суммы
+                    setTimeout(() => {
+                      const input = document.querySelector(
+                        'input[type="number"][placeholder="0"]'
+                      );
+                      if (input) {
+                        input.focus();
+                        input.select();
+                      }
+                    }, 100);
+                  }}
                   size="sm"
                 >
                   Оплатить полностью
@@ -1190,72 +1349,177 @@ function RegisterPage() {
           <ModalHeader>Каталог стандартных анализов</ModalHeader>
           <ModalCloseButton />
           <ModalBody overflowY="auto">
-            <SimpleGrid columns={2} spacing={4}>
-              {labCategories
-                .filter((cat) => cat.isActive !== false)
-                .map((category) => {
-                  const price = category.basePrice || category.sum || 0;
-                  const isSelected = selectedAnalyses.find(
-                    (a) => a.categoryId === category.id
-                  );
+            {/* Вкладки с отделами */}
+            <Tabs variant="enclosed" colorScheme="blue" mb={4}>
+              <TabList overflowX="auto" py={2}>
+                <Tab onClick={() => setSelectedDepartment(null)}>
+                  Все анализы
+                </Tab>
+                {Array.from(
+                  new Set(
+                    labCategories.map((cat) => cat.department).filter(Boolean)
+                  )
+                ).map((dept) => (
+                  <Tab key={dept} onClick={() => setSelectedDepartment(dept)}>
+                    {dept}
+                  </Tab>
+                ))}
+              </TabList>
 
-                  return (
-                    <Card
+              <TabPanels>
+                <TabPanel>
+                  {/* Все анализы */}
+                  {filteredLabCategories.length > 0 ? (
+                    <SimpleGrid columns={2} spacing={4}>
+                      {filteredLabCategories.map((category) => (
+                        <AnalysisCard
+                          key={category.id}
+                          category={category}
+                          isSelected={selectedAnalyses.find(
+                            (a) => a.categoryId === category.id
+                          )}
+                          onSelect={handleAnalysisSelect}
+                        />
+                      ))}
+                    </SimpleGrid>
+                  ) : (
+                    <Alert status="info">
+                      <AlertIcon />
+                      Нет доступных анализов
+                    </Alert>
+                  )}
+                </TabPanel>
+
+                {/* Отдельные вкладки для каждого отдела */}
+                {Array.from(
+                  new Set(
+                    labCategories.map((cat) => cat.department).filter(Boolean)
+                  )
+                ).map((dept) => (
+                  <TabPanel key={dept}>
+                    <VStack align="stretch" spacing={4}>
+                      <Heading size="md" color="blue.700">
+                        {dept}
+                      </Heading>
+                      <SimpleGrid columns={2} spacing={4}>
+                        {labCategories
+                          .filter(
+                            (cat) =>
+                              cat.department === dept && cat.isActive !== false
+                          )
+                          .map((category) => (
+                            <AnalysisCard
+                              key={category.id}
+                              category={category}
+                              isSelected={selectedAnalyses.find(
+                                (a) => a.categoryId === category.id
+                              )}
+                              onSelect={handleAnalysisSelect}
+                            />
+                          ))}
+                      </SimpleGrid>
+                    </VStack>
+                  </TabPanel>
+                ))}
+              </TabPanels>
+            </Tabs>
+
+            {/* Быстрый поиск внутри модального окна */}
+            <Box mb={4} position="relative">
+              <Input
+                placeholder="🔍 Поиск по названию или коду..."
+                value={modalSearchTerm}
+                onChange={(e) => setModalSearchTerm(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && modalSearchSuggestions.length > 0) {
+                    handleAnalysisSelect(modalSearchSuggestions[0]);
+                    setModalSearchTerm("");
+                  }
+                }}
+              />
+              {modalSearchTerm && modalSearchSuggestions.length > 0 && (
+                <Box
+                  position="absolute"
+                  top="100%"
+                  left={0}
+                  right={0}
+                  bg="white"
+                  border="1px solid"
+                  borderColor="gray.200"
+                  borderRadius="md"
+                  shadow="lg"
+                  zIndex={1000}
+                  maxH="200px"
+                  overflowY="auto"
+                >
+                  {modalSearchSuggestions.map((category) => (
+                    <Box
                       key={category.id}
-                      variant="outline"
-                      borderWidth="2px"
-                      borderColor={isSelected ? "blue.500" : "gray.200"}
-                      bg={isSelected ? "blue.50" : "white"}
+                      p={2}
+                      borderBottom="1px solid"
+                      borderColor="gray.100"
+                      cursor="pointer"
+                      _hover={{ bg: "blue.50" }}
+                      onClick={() => {
+                        handleAnalysisSelect(category);
+                        setModalSearchTerm("");
+                      }}
                     >
-                      <CardBody>
-                        <VStack align="stretch" spacing={3}>
-                          <HStack justify="space-between">
-                            <Badge colorScheme="blue">
-                              {category.code || category.id}
+                      <HStack justify="space-between">
+                        <VStack align="start" spacing={0}>
+                          <Text fontWeight="medium">{category.name}</Text>
+                          <HStack spacing={2}>
+                            <Badge colorScheme="blue" size="sm">
+                              {category.code}
                             </Badge>
                             {category.department && (
-                              <Badge colorScheme="purple" fontSize="xs">
+                              <Badge colorScheme="purple" size="sm">
                                 {category.department}
                               </Badge>
                             )}
                           </HStack>
-
-                          <Text fontWeight="bold" fontSize="lg">
-                            {category.name}
-                          </Text>
-
-                          {category.description && (
-                            <Text fontSize="sm" color="gray.600" noOfLines={2}>
-                              {category.description}
-                            </Text>
-                          )}
-
-                          <HStack justify="space-between" mt={2}>
-                            <Text
-                              fontSize="xl"
-                              fontWeight="bold"
-                              color="green.600"
-                            >
-                              {parseInt(price).toLocaleString()} сум
-                            </Text>
-                            <Button
-                              size="sm"
-                              colorScheme={isSelected ? "green" : "blue"}
-                              onClick={() => handleAnalysisSelect(category)}
-                              isDisabled={isSelected}
-                            >
-                              {isSelected ? "✓ Добавлено" : "Добавить"}
-                            </Button>
-                          </HStack>
                         </VStack>
-                      </CardBody>
-                    </Card>
-                  );
-                })}
-            </SimpleGrid>
+                        <Text fontWeight="bold" color="green.600">
+                          {(
+                            category.basePrice ||
+                            category.sum ||
+                            0
+                          ).toLocaleString()}{" "}
+                          сум
+                        </Text>
+                      </HStack>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+
+            {/* Выбранные анализы (мини-панель) */}
+            {selectedAnalyses.length > 0 && (
+              <Box mb={4} p={3} bg="blue.50" borderRadius="md">
+                <HStack justify="space-between">
+                  <Text fontWeight="bold" color="blue.700">
+                    Выбрано анализов: {selectedAnalyses.length}
+                  </Text>
+                  <Button
+                    size="sm"
+                    colorScheme="red"
+                    variant="ghost"
+                    onClick={() => setSelectedAnalyses([])}
+                  >
+                    Очистить все
+                  </Button>
+                </HStack>
+              </Box>
+            )}
           </ModalBody>
           <ModalFooter>
-            <Button onClick={onLabClose}>Закрыть</Button>
+            <HStack spacing={3}>
+              <Badge colorScheme="blue" p={2}>
+                Выбрано: {selectedAnalyses.length}
+              </Badge>
+              <Button onClick={onLabClose}>Закрыть</Button>
+            </HStack>
           </ModalFooter>
         </ModalContent>
       </Modal>

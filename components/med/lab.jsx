@@ -256,8 +256,8 @@ function Lab() {
         </Button>
       </Flex>
 
-      <TableContainer overflowX="auto" width="100%">
-        <Table variant="striped" size="sm" width="100%">
+      <TableContainer overflowX="auto">
+        <Table variant="striped" size="sm">
           <Thead position="sticky" top={0} zIndex={1} bg="white">
             <Tr>
               <Th>Название</Th>
@@ -439,7 +439,7 @@ function Lab() {
                     <option value="Микробиологическая лаборатория">
                       Микробиологическая лаборатория
                     </option>
-                    <option value="Каулограмма">Каулограмма</option>
+                    <option value="Коагулограмма ">Коагулограмма </option>
                     <option value="ПЦР лаборатория">ПЦР лаборатория</option>
                     <option value="Иммунохроматографический анализ">
                       Иммунохроматографический анализ

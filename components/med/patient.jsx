@@ -45,7 +45,7 @@ import {
   Tab,
   TabPanel,
 } from "@chakra-ui/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getApiBaseUrl } from "../../utils/api";
 import {
@@ -53,7 +53,163 @@ import {
   SearchIcon,
   ArrowUpIcon,
   ArrowDownIcon,
+  CheckIcon,
+  AddIcon,
 } from "@chakra-ui/icons";
+
+// Компонент карточки анализа
+const AnalysisCard = ({ category, isSelected, onSelect }) => {
+  const price = category.basePrice || category.sum || 0;
+
+  return (
+    <Card
+      variant="outline"
+      borderWidth="2px"
+      borderColor={isSelected ? "blue.500" : "gray.200"}
+      bg={isSelected ? "blue.50" : "white"}
+      _hover={{
+        borderColor: isSelected ? "blue.500" : "blue.300",
+        shadow: "md",
+      }}
+      transition="all 0.2s"
+    >
+      <CardBody>
+        <VStack align="stretch" spacing={3}>
+          <HStack justify="space-between">
+            <HStack spacing={2}>
+              <Badge colorScheme="blue" fontSize="xs">
+                {category.code || category.id}
+              </Badge>
+              {category.department && (
+                <Badge colorScheme="purple" fontSize="xs">
+                  {category.department}
+                </Badge>
+              )}
+            </HStack>
+            {category.sampleType && (
+              <Badge colorScheme="gray" fontSize="xs">
+                🧪 {category.sampleType}
+              </Badge>
+            )}
+          </HStack>
+
+          <Text fontWeight="bold" fontSize="lg" minH="3rem">
+            {category.name}
+          </Text>
+
+          {category.description && (
+            <Text fontSize="sm" color="gray.600" noOfLines={2}>
+              {category.description}
+            </Text>
+          )}
+
+          {category.executionTime && (
+            <HStack>
+              <Text fontSize="xs" color="gray.500">
+                ⏱️ Срок:
+              </Text>
+              <Text fontSize="xs" fontWeight="medium">
+                {category.executionTime}
+              </Text>
+            </HStack>
+          )}
+
+          <Divider />
+
+          <HStack justify="space-between">
+            <Text fontSize="xl" fontWeight="bold" color="green.600">
+              {parseInt(price).toLocaleString()} сум
+            </Text>
+            <Button
+              size="sm"
+              colorScheme={isSelected ? "green" : "blue"}
+              onClick={() => onSelect(category)}
+              isDisabled={isSelected}
+              leftIcon={isSelected ? <CheckIcon /> : <AddIcon />}
+            >
+              {isSelected ? "Добавлено" : "Добавить"}
+            </Button>
+          </HStack>
+        </VStack>
+      </CardBody>
+    </Card>
+  );
+};
+
+// Компонент карточки бланка
+const BlankCard = ({ blank, isSelected, onSelect }) => {
+  return (
+    <Card
+      variant="outline"
+      borderWidth="2px"
+      borderColor={isSelected ? "purple.500" : "gray.200"}
+      bg={isSelected ? "purple.50" : "white"}
+      _hover={{
+        borderColor: isSelected ? "purple.500" : "purple.300",
+        shadow: "md",
+      }}
+      transition="all 0.2s"
+    >
+      <CardBody>
+        <VStack align="stretch" spacing={3}>
+          <HStack justify="space-between">
+            <HStack spacing={2}>
+              <Badge colorScheme="purple" fontSize="xs">
+                Бланк #{blank.id}
+              </Badge>
+              {blank.department && (
+                <Badge colorScheme="blue" fontSize="xs">
+                  {blank.department}
+                </Badge>
+              )}
+            </HStack>
+            {blank.sampleType && (
+              <Badge colorScheme="gray" fontSize="xs">
+                🧪 {blank.sampleType}
+              </Badge>
+            )}
+          </HStack>
+
+          <Text fontWeight="bold" fontSize="lg" minH="3rem">
+            {blank.name}
+          </Text>
+
+          {blank.description && (
+            <Text fontSize="sm" color="gray.600" noOfLines={2}>
+              {blank.description}
+            </Text>
+          )}
+
+          <VStack align="stretch" spacing={1} fontSize="sm">
+            {blank.category && (
+              <HStack>
+                <Text color="gray.600">📂 Категория:</Text>
+                <Text fontWeight="medium">{blank.category}</Text>
+              </HStack>
+            )}
+          </VStack>
+
+          <Divider />
+
+          <HStack justify="space-between">
+            <Text fontSize="xl" fontWeight="bold" color="green.600">
+              {(blank.price || 0).toLocaleString()} сум
+            </Text>
+            <Button
+              size="sm"
+              colorScheme={isSelected ? "green" : "purple"}
+              onClick={() => onSelect(blank)}
+              isDisabled={isSelected}
+              leftIcon={isSelected ? <CheckIcon /> : <AddIcon />}
+            >
+              {isSelected ? "Добавлено" : "Добавить"}
+            </Button>
+          </HStack>
+        </VStack>
+      </CardBody>
+    </Card>
+  );
+};
 
 export default function PatientPage() {
   const { id } = useParams();
@@ -63,7 +219,6 @@ export default function PatientPage() {
   const [blankAssignments, setBlankAssignments] = useState([]);
   const [cashRecords, setCashRecords] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [sampleType, setSampleType] = useState("Кровь (сыворотка)");
   const [selectedTests, setSelectedTests] = useState([]);
   const [selectedBlanks, setSelectedBlanks] = useState([]);
   const toast = useToast();
@@ -78,7 +233,13 @@ export default function PatientPage() {
   const [searchAnalysisTerm, setSearchAnalysisTerm] = useState("");
   const [filteredCategories, setFilteredCategories] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [paidAmount, setPaidAmount] = useState(0);
+  const [paidAmount, setPaidAmount] = useState(""); // Изменено на пустую строку
+
+  // Состояния для структурированного отображения анализов
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
+  const [modalSearchTerm, setModalSearchTerm] = useState("");
+  const [modalSearchSuggestions, setModalSearchSuggestions] = useState([]);
+  const [activeTabIndex, setActiveTabIndex] = useState(0); // 0 - анализы, 1 - бланки
 
   const {
     isOpen: isPrintModalOpen,
@@ -113,6 +274,73 @@ export default function PatientPage() {
       fetchPatientData();
     }
   }, [id]);
+
+  // Фильтрация анализов для модального окна
+  const filteredLabCategories = useMemo(() => {
+    let filtered = labCategories.filter((cat) => cat.isActive !== false);
+
+    if (selectedDepartment) {
+      filtered = filtered.filter(
+        (cat) => cat.department === selectedDepartment
+      );
+    }
+
+    if (modalSearchTerm) {
+      const expandedQuery = expandMedicalTerms(modalSearchTerm);
+      const terms = expandedQuery
+        .split(/\s+/)
+        .filter((term) => term.length > 0);
+
+      filtered = filtered.filter((category) => {
+        const searchText = `
+          ${category.name?.toLowerCase() || ""}
+          ${category.department?.toLowerCase() || ""}
+          ${category.description?.toLowerCase() || ""}
+        `;
+        return terms.every((term) => searchText.includes(term));
+      });
+    }
+
+    return filtered;
+  }, [labCategories, selectedDepartment, modalSearchTerm]);
+
+  // Поиск в модальном окне
+  useEffect(() => {
+    if (modalSearchTerm && modalSearchTerm.length >= 2) {
+      const expandedQuery = expandMedicalTerms(modalSearchTerm);
+      const terms = expandedQuery
+        .split(/\s+/)
+        .filter((term) => term.length > 0);
+
+      // Ищем и в анализах, и в бланках
+      const suggestions = [
+        ...labCategories
+          .filter((category) => {
+            const searchText = `
+              ${category.name?.toLowerCase() || ""}
+              ${category.department?.toLowerCase() || ""}
+              ${category.description?.toLowerCase() || ""}
+            `;
+            return terms.every((term) => searchText.includes(term));
+          })
+          .map((cat) => ({ ...cat, type: "analysis" })),
+        ...blanks
+          .filter((blank) => {
+            const searchText = `
+              ${blank.name?.toLowerCase() || ""}
+              ${blank.department?.toLowerCase() || ""}
+              ${blank.description?.toLowerCase() || ""}
+            `;
+            return terms.every((term) => searchText.includes(term));
+          })
+          .map((blank) => ({ ...blank, type: "blank" })),
+      ].slice(0, 5);
+
+      setModalSearchSuggestions(suggestions);
+    } else {
+      setModalSearchSuggestions([]);
+    }
+  }, [modalSearchTerm, labCategories, blanks]);
 
   const fetchPatientData = async () => {
     try {
@@ -397,7 +625,8 @@ export default function PatientPage() {
     );
     const totalAmount = analysisTotal + blankTotal;
     const finalAmount = totalAmount;
-    const debtAmount = Math.max(0, finalAmount - paidAmount);
+    const paid = parseFloat(paidAmount) || 0;
+    const debtAmount = Math.max(0, finalAmount - paid);
 
     return { totalAmount, finalAmount, debtAmount };
   };
@@ -513,13 +742,18 @@ export default function PatientPage() {
         discount: 0,
         discountPercent: 0,
         finalAmount,
-        paidAmount,
+        paidAmount: parseFloat(paidAmount) || 0,
         debtAmount,
         paymentMethod,
         servicesDescription,
         labAnalyses: selectedAnalyses.map((a) => a.categoryId),
         blanks: selectedBlankItems.map((b) => b.id),
-        status: debtAmount === 0 ? "paid" : paidAmount > 0 ? "partial" : "debt",
+        status:
+          debtAmount === 0
+            ? "paid"
+            : parseFloat(paidAmount) || 0 > 0
+            ? "partial"
+            : "debt",
         date: new Date().toISOString(),
       };
 
@@ -539,8 +773,11 @@ export default function PatientPage() {
       setIsAddAnalysisOpen(false);
       setSelectedAnalyses([]);
       setSelectedBlankItems([]);
-      setPaidAmount(0);
+      setPaidAmount("");
       setSearchAnalysisTerm("");
+      setModalSearchTerm("");
+      setSelectedDepartment(null);
+      setActiveTabIndex(0);
 
       fetchPatientData();
     } catch (error) {
@@ -739,50 +976,52 @@ export default function PatientPage() {
 
     return "";
   };
-  useEffect(() => {
-    if (labResults.length > 0) {
-      console.log("=== ДЕБАГ РЕЗУЛЬТАТОВ ===");
-      labResults.forEach((lab, index) => {
-        console.log(`${index + 1}. ${lab.name}:`);
-        console.log("  Результат из API:", lab.result);
-        console.log("  Тип результата:", typeof lab.result);
-        console.log("  cleanResult:", cleanResult(lab.result));
-        console.log("---");
-      });
-    }
-  }, [labResults]);
 
-  // Используйте эту упрощенную cleanResult
   const cleanResult = (result) => {
-    console.log("Очистка результата:", result, "тип:", typeof result);
-
     if (result == null || result === "") {
       return "—";
     }
 
-    // Если это число - просто возвращаем как есть
+    // Если это число - сохраняем точность
     if (typeof result === "number") {
-      return result.toString();
+      if (Number.isInteger(result)) {
+        return result.toString();
+      } else {
+        return result.toFixed(2);
+      }
     }
 
     // Если строка - обрабатываем
     const str = String(result).trim();
-    console.log("После trim:", str);
 
-    // Если есть нецифровые символы (кроме операторов)
-    if (/[<>]/.test(str)) {
+    // Если результат содержит операторы сравнения (<, >)
+    if (/^[<>≤≥]/.test(str)) {
       return str;
     }
 
-    // Пытаемся распарсить число
-    const num = Number(str);
-    if (isNaN(num)) {
-      return str;
+    // Проверяем, является ли строка числом
+    const numStr = str.replace(/,/g, ".");
+    const num = parseFloat(numStr);
+
+    if (!isNaN(num)) {
+      const hasDecimal = /[.,]/.test(str);
+      const decimalCount = (str.split(/[.,]/)[1] || "").length;
+
+      if (hasDecimal && decimalCount > 0) {
+        if (str.includes(",")) {
+          return str;
+        }
+        return str;
+      } else if (str.includes(".") && numStr.includes(".")) {
+        return str;
+      } else {
+        return num.toString();
+      }
     }
 
-    console.log("Числовое значение:", num);
-    return num.toString();
+    return str;
   };
+
   const groupResultsByCategory = (results) => {
     const groups = {};
 
@@ -864,6 +1103,7 @@ export default function PatientPage() {
 
     const groupedResults = groupResultsByCategory(results);
 
+    // Группируем по отделениям
     const departmentGroups = results.reduce((acc, lab) => {
       const dept = lab.department || "Общие анализы";
       if (!acc[dept]) acc[dept] = [];
@@ -891,9 +1131,9 @@ export default function PatientPage() {
     }
     
     body {
-      font-family: Arial, sans-serif;
-      font-size: 10px;
-      line-height: 1.3;
+      font-family: 'Arial', sans-serif;
+      font-size: 11px;
+      line-height: 1.4;
       color: #000;
       background: #fff;
     }
@@ -930,21 +1170,21 @@ export default function PatientPage() {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 12px;
-      padding-bottom: 12px;
+      margin-bottom: 15px;
+      padding-bottom: 15px;
       border-bottom: 2px solid #2B7EC1;
     }
     
     .header-left {
       display: flex;
       align-items: flex-start;
-      gap: 12px;
+      gap: 15px;
       flex: 1;
     }
     
     .logo img {
-      width: 60px;
-      height: 60px;
+      width: 70px;
+      height: 70px;
     }
     
     .header-text {
@@ -952,133 +1192,137 @@ export default function PatientPage() {
     }
     
     .company-name {
-      font-size: 20px;
+      font-size: 24px;
       font-weight: bold;
       color: #2B7EC1;
-      margin-bottom: 4px;
+      margin-bottom: 5px;
       letter-spacing: 1px;
     }
     
     .subtitle {
-      font-size: 9px;
+      font-size: 11px;
       color: #2B7EC1;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       text-transform: uppercase;
     }
     
     .association {
-      font-size: 7px;
+      font-size: 9px;
       color: #666;
-      line-height: 1.3;
-      max-width: 400px;
+      line-height: 1.4;
+      max-width: 450px;
     }
     
     .certificate {
       display: inline-block;
       border: 1px solid #000;
-      padding: 2px 8px;
-      font-size: 8px;
-      margin-top: 6px;
+      padding: 3px 10px;
+      font-size: 9px;
+      margin-top: 8px;
     }
     
     .header-right {
       text-align: right;
-      font-size: 8px;
+      font-size: 10px;
       line-height: 1.5;
       color: #333;
     }
     
     .patient-info {
-      margin: 15px 0;
-      font-size: 9px;
+      margin: 20px 0;
+      font-size: 12px;
     }
     
     .info-row {
       display: flex;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       border-bottom: 1px solid #E8E8E8;
-      padding-bottom: 4px;
+      padding-bottom: 6px;
     }
     
     .info-label {
-      width: 130px;
+      width: 150px;
       color: #666;
       font-weight: 500;
+      font-size: 12px;
     }
     
     .info-value {
       flex: 1;
       color: #000;
+      font-size: 12px;
     }
     
     .results-section {
-      margin: 20px 0;
+      margin: 25px 0;
     }
     
     .results-title {
       text-align: center;
-      font-size: 12px;
+      font-size: 16px;
       font-weight: bold;
-      margin-bottom: 15px;
+      margin-bottom: 20px;
       color: #2B7EC1;
+      padding: 10px;
+      border-bottom: 2px solid #2B7EC1;
     }
 
     .department-title {
-      font-size: 11px;
+      font-size: 14px;
       font-weight: bold;
       color: #2B7EC1;
-      margin: 20px 0 10px 0;
-      padding: 6px 10px;
+      margin: 25px 0 15px 0;
+      padding: 10px 15px;
       background: linear-gradient(to right, #F0F0F0, #FFFFFF);
-      border-left: 4px solid #2B7EC1;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border-left: 5px solid #2B7EC1;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
     .results-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 15px;
-      font-size: 9px;
+      margin-bottom: 20px;
+      font-size: 11px;
       border: 1px solid #DDD;
     }
     
     .results-table th {
       background: #F8F9FA;
       border: 1px solid #CCC;
-      padding: 7px 5px;
+      padding: 10px 8px;
       text-align: center;
       font-weight: bold;
-      font-size: 9px;
+      font-size: 11px;
       color: #2B7EC1;
     }
     
     .results-table td {
       border: 1px solid #DDD;
-      padding: 6px 5px;
+      padding: 8px 6px;
       vertical-align: middle;
     }
     
     .test-name {
       font-weight: 500;
-      font-size: 9.5px;
-      padding-left: 8px !important;
+      font-size: 12px;
+      padding-left: 10px !important;
     }
     
     .result-value {
       text-align: center;
       font-weight: bold;
-      font-size: 10.5px;
+      font-size: 13px;
       font-family: 'Courier New', monospace;
-      padding: 6px 3px !important;
+      padding: 8px 4px !important;
     }
 
     .arrow {
       display: inline-block;
-      margin-left: 4px;
-      font-size: 13px;
+      margin-left: 5px;
+      font-size: 16px;
       font-weight: bold;
       position: relative;
-      top: 1px;
+      top: 2px;
     }
 
     .arrow-up {
@@ -1091,22 +1335,22 @@ export default function PatientPage() {
     
     .unit {
       text-align: center;
-      font-size: 9px;
+      font-size: 11px;
       color: #666;
-      padding: 6px 3px !important;
+      padding: 8px 4px !important;
     }
     
     .reference {
-      font-size: 9px;
+      font-size: 11px;
       color: #444;
       text-align: center;
-      padding: 6px 3px !important;
+      padding: 8px 4px !important;
       font-family: 'Arial', sans-serif;
     }
     
     .abnormal {
       background-color: #FFF5F5 !important;
-      border-left: 3px solid #D32F2F !important;
+      border-left: 4px solid #D32F2F !important;
     }
     
     .result-abnormal {
@@ -1115,13 +1359,13 @@ export default function PatientPage() {
     }
     
     .footer-section {
-      margin-top: 30px;
+      margin-top: 40px;
     }
     
     .signatures {
       display: flex;
       justify-content: space-between;
-      margin-top: 25px;
+      margin-top: 35px;
     }
     
     .signature-block {
@@ -1130,105 +1374,106 @@ export default function PatientPage() {
     }
     
     .signature-line {
-      margin-top: 40px;
-      padding-top: 4px;
+      margin-top: 50px;
+      padding-top: 6px;
       border-top: 1px solid #000;
-      font-size: 9px;
+      font-size: 11px;
     }
     
     .barcode {
       text-align: right;
-      margin-top: 15px;
-      margin-bottom: 12px;
+      margin-top: 20px;
+      margin-bottom: 15px;
     }
 
     .barcode img {
-      height: 35px;
+      height: 45px;
       width: auto;
     }
     
     .disclaimer {
-      margin-top: 12px;
+      margin-top: 15px;
       text-align: center;
-      font-size: 8px;
+      font-size: 10px;
       color: #FF9800;
       font-style: italic;
-      padding: 8px;
+      padding: 10px;
       background: #FFF8E1;
-      border-radius: 4px;
+      border-radius: 5px;
     }
     
     .document-footer {
-      margin-top: 15px;
-      padding-top: 8px;
+      margin-top: 20px;
+      padding-top: 10px;
       border-top: 1px solid #DDD;
       text-align: center;
-      font-size: 7px;
+      font-size: 9px;
       color: #999;
     }
     
     .method-info {
-      font-size: 8px;
+      font-size: 10px;
       color: #666;
       font-style: italic;
-      margin-top: 2px;
+      margin-top: 3px;
     }
     
     .conclusion-section {
-      margin-top: 15px;
-      padding: 10px;
+      margin-top: 20px;
+      padding: 12px;
       background: #F5F9FF;
-      border-left: 3px solid #2B7EC1;
-      border-radius: 0 4px 4px 0;
+      border-left: 4px solid #2B7EC1;
+      border-radius: 0 5px 5px 0;
     }
     
     .conclusion-title {
       font-weight: bold;
-      font-size: 10px;
-      margin-bottom: 6px;
+      font-size: 13px;
+      margin-bottom: 8px;
       color: #2B7EC1;
     }
     
     .conclusion-text {
-      font-size: 9.5px;
-      line-height: 1.4;
+      font-size: 12px;
+      line-height: 1.5;
       color: #333;
     }
 
     .blank-section {
-      margin: 25px 0;
+      margin: 30px 0;
       page-break-inside: avoid;
     }
 
     .blank-title {
-      font-size: 12px;
+      font-size: 14px;
       font-weight: bold;
       color: #2B7EC1;
-      margin-bottom: 12px;
-      padding: 8px 12px;
+      margin-bottom: 15px;
+      padding: 10px 15px;
       background: linear-gradient(to right, #F0F0F0, #FFFFFF);
-      border-left: 4px solid #2B7EC1;
+      border-left: 5px solid #2B7EC1;
     }
 
     .blank-content {
-      margin: 15px 0;
-      padding: 10px;
+      margin: 20px 0;
+      padding: 12px;
       border: 1px solid #E0E0E0;
-      border-radius: 4px;
+      border-radius: 5px;
       background: #FAFAFA;
+      font-size: 12px;
     }
 
     .blank-content table {
       width: 100%;
       border-collapse: collapse;
-      margin: 10px 0;
+      margin: 12px 0;
     }
 
     .blank-content table th,
     .blank-content table td {
       border: 1px solid #000;
-      padding: 8px;
-      font-size: 9.5px;
+      padding: 10px;
+      font-size: 11px;
     }
 
     .blank-content table th {
@@ -1245,36 +1490,45 @@ export default function PatientPage() {
     }
 
     .test-group-spacer {
-      height: 5px;
+      height: 8px;
       background: #FAFAFA;
     }
 
     .related-tests-group {
-      margin-bottom: 20px;
+      margin-bottom: 25px;
       border: 1px solid #E0E0E0;
-      border-radius: 6px;
+      border-radius: 8px;
       overflow: hidden;
     }
 
     .related-tests-title {
       background: linear-gradient(to right, #2B7EC1, #4A90E2);
       color: white;
-      padding: 8px 12px;
-      font-size: 10.5px;
+      padding: 10px 15px;
+      font-size: 13px;
       font-weight: bold;
       margin: 0;
     }
 
     .test-code {
-      font-size: 8px;
+      font-size: 10px;
       color: #666;
       font-family: 'Courier New', monospace;
-      margin-top: 2px;
+      margin-top: 3px;
+    }
+
+    .related-test-row {
+      background: #F9F9F9 !important;
+    }
+
+    .related-test-row td:first-child {
+      padding-left: 20px !important;
     }
     
     @media print {
       body {
         background: white;
+        font-size: 11px !important;
       }
       
       .page {
@@ -1299,6 +1553,10 @@ export default function PatientPage() {
       .test-group-header {
         background: #F0F8FF !important;
         -webkit-print-color-adjust: exact;
+      }
+
+      .related-tests-group {
+        page-break-inside: avoid;
       }
     }
   </style>
@@ -1360,204 +1618,106 @@ export default function PatientPage() {
         
         ${Object.entries(departmentGroups)
           .map(([department, deptResults]) => {
-            // Группируем тесты внутри отделения
             const groupedDeptResults = groupResultsByCategory(deptResults);
+            const allRelatedTests = [];
+
+            Object.values(groupedDeptResults).forEach((groupTests) => {
+              groupTests.forEach((lab) => {
+                allRelatedTests.push(lab);
+              });
+            });
 
             return `
                 <div class="department-title">${department}</div>
                 
-                ${Object.entries(groupedDeptResults)
-                  .map(([groupName, groupTests]) => {
-                    // Если в группе несколько тестов - это связанные тесты
-                    if (groupTests.length > 1) {
-                      return `
-                        <div class="related-tests-group">
-                          <div class="related-tests-title">${groupName} и связанные показатели</div>
-                          <table class="results-table">
-                            <thead>
-                              <tr>
-                                <th style="width: 40%;">Показатель</th>
-                                <th style="width: 15%;">Результат</th>
-                                <th style="width: 10%;">Ед. изм.</th>
-                                <th style="width: 20%;">Норма</th>
-                                <th style="width: 15%;">Метод</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              ${groupTests
-                                .map((lab) => {
-                                  let referenceDisplay = "—";
-                                  if (lab.referenceText) {
-                                    referenceDisplay = lab.referenceText;
-                                  } else if (
-                                    lab.referenceMin !== null &&
-                                    lab.referenceMax !== null
-                                  ) {
-                                    const min = parseFloat(lab.referenceMin);
-                                    const max = parseFloat(lab.referenceMax);
-                                    if (!isNaN(min) && !isNaN(max)) {
-                                      referenceDisplay = `${min} - ${max}`;
-                                    }
-                                  } else if (lab.norma) {
-                                    referenceDisplay = lab.norma;
-                                  }
-
-                                  // Очищаем результат (сохраняем дробную часть)
-                                  const cleanedResult = cleanResult(lab.result);
-
-                                  // Определяем стрелку отклонения
-                                  const arrow = getArrow(
-                                    lab.result,
-                                    lab.referenceMin,
-                                    lab.referenceMax,
-                                    lab.referenceText
-                                  );
-
-                                  // Проверяем отклонение
-                                  const isAbnormal = checkAbnormal(
-                                    lab.result,
-                                    lab.referenceMin,
-                                    lab.referenceMax,
-                                    lab.referenceText
-                                  );
-
-                                  return `
-                                    <tr${isAbnormal ? ' class="abnormal"' : ""}>
-                                      <td class="test-name">
-                                        <div>${lab.name}</div>
-                                        ${
-                                          lab.testCode
-                                            ? `<div class="test-code">${lab.testCode}</div>`
-                                            : ""
-                                        }
-                                      </td>
-                                      <td class="result-value${
-                                        isAbnormal ? " result-abnormal" : ""
-                                      }">
-                                        ${cleanedResult}${arrow}
-                                      </td>
-                                      <td class="unit">${lab.unit || "—"}</td>
-                                      <td class="reference">${referenceDisplay}</td>
-                                      <td style="font-size: 9px; text-align: center;">
-                                        ${lab.method || "—"}
-                                      </td>
-                                    </tr>
-                                    ${
-                                      lab.conclusion
-                                        ? `
-                                    <tr>
-                                      <td colspan="5" style="padding: 8px; background: #F5F9FF;">
-                                        <div class="conclusion-title">Заключение врача-лаборанта:</div>
-                                        <div class="conclusion-text">${
-                                          lab.conclusion
-                                        }</div>
-                                        ${
-                                          lab.executedBy
-                                            ? `<div class="method-info" style="margin-top: 4px;">Исполнитель: ${lab.executedBy}</div>`
-                                            : ""
-                                        }
-                                      </td>
-                                    </tr>
-                                    `
-                                        : ""
-                                    }
-                                  `;
-                                })
-                                .join("")}
-                            </tbody>
-                          </table>
-                        </div>
-                      `;
-                    } else {
-                      // Одиночные тесты
-                      const lab = groupTests[0];
-                      let referenceDisplay = "—";
-                      if (lab.referenceText) {
-                        referenceDisplay = lab.referenceText;
-                      } else if (
-                        lab.referenceMin !== null &&
-                        lab.referenceMax !== null
-                      ) {
-                        const min = parseFloat(lab.referenceMin);
-                        const max = parseFloat(lab.referenceMax);
-                        if (!isNaN(min) && !isNaN(max)) {
-                          referenceDisplay = `${min} - ${max}`;
+                <table class="results-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 40%;">Показатель</th>
+                      <th style="width: 15%;">Результат</th>
+                      <th style="width: 10%;">Ед. изм.</th>
+                      <th style="width: 20%;">Референтные значения</th>
+                      <th style="width: 15%;">Метод</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${allRelatedTests
+                      .map((lab) => {
+                        let referenceDisplay = "—";
+                        if (lab.referenceText) {
+                          referenceDisplay = lab.referenceText;
+                        } else if (
+                          lab.referenceMin !== null &&
+                          lab.referenceMax !== null
+                        ) {
+                          const min = parseFloat(lab.referenceMin);
+                          const max = parseFloat(lab.referenceMax);
+                          if (!isNaN(min) && !isNaN(max)) {
+                            referenceDisplay = `${min} - ${max}`;
+                          }
+                        } else if (lab.norma) {
+                          referenceDisplay = lab.norma;
                         }
-                      } else if (lab.norma) {
-                        referenceDisplay = lab.norma;
-                      }
 
-                      const cleanedResult = cleanResult(lab.result);
-                      const arrow = getArrow(
-                        lab.result,
-                        lab.referenceMin,
-                        lab.referenceMax,
-                        lab.referenceText
-                      );
-                      const isAbnormal = checkAbnormal(
-                        lab.result,
-                        lab.referenceMin,
-                        lab.referenceMax,
-                        lab.referenceText
-                      );
+                        const cleanedResult = cleanResult(lab.result);
+                        const arrow = getArrow(
+                          lab.result,
+                          lab.referenceMin,
+                          lab.referenceMax,
+                          lab.referenceText
+                        );
+                        const isAbnormal = checkAbnormal(
+                          lab.result,
+                          lab.referenceMin,
+                          lab.referenceMax,
+                          lab.referenceText
+                        );
 
-                      return `
-                        <table class="results-table" style="margin-bottom: 15px;">
-                          <thead>
-                            <tr>
-                              <th style="width: 40%;">Показатель</th>
-                              <th style="width: 15%;">Результат</th>
-                              <th style="width: 10%;">Ед. изм.</th>
-                              <th style="width: 20%;">Референтные значения</th>
-                              <th style="width: 15%;">Метод</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr${isAbnormal ? ' class="abnormal"' : ""}>
-                              <td class="test-name">
-                                <div>${lab.name}</div>
-                                ${
-                                  lab.testCode
-                                    ? `<div class="test-code">${lab.testCode}</div>`
-                                    : ""
-                                }
-                              </td>
-                              <td class="result-value${
-                                isAbnormal ? " result-abnormal" : ""
-                              }">
-                                ${cleanedResult}${arrow}
-                              </td>
-                              <td class="unit">${lab.unit || "—"}</td>
-                              <td class="reference">${referenceDisplay}</td>
-                              <td style="font-size: 9px; text-align: center;">
-                                ${lab.method || "—"}
-                              </td>
-                            </tr>
-                            ${
-                              lab.conclusion
-                                ? `
-                            <tr>
-                              <td colspan="5" style="padding: 8px; background: #F5F9FF;">
-                                <div class="conclusion-title">Заключение врача-лаборанта:</div>
-                                <div class="conclusion-text">${
-                                  lab.conclusion
-                                }</div>
-                                ${
-                                  lab.executedBy
-                                    ? `<div class="method-info" style="margin-top: 4px;">Исполнитель: ${lab.executedBy}</div>`
-                                    : ""
-                                }
-                              </td>
-                            </tr>
-                            `
-                                : ""
-                            }
-                          </tbody>
-                        </table>
-                      `;
-                    }
-                  })
-                  .join("")}
+                        return `
+                          <tr${isAbnormal ? ' class="abnormal"' : ""}>
+                            <td class="test-name">
+                              <div>${lab.name}</div>
+                              ${
+                                lab.testCode
+                                  ? `<div class="test-code">${lab.testCode}</div>`
+                                  : ""
+                              }
+                            </td>
+                            <td class="result-value${
+                              isAbnormal ? " result-abnormal" : ""
+                            }">
+                              ${cleanedResult}${arrow}
+                            </td>
+                            <td class="unit">${lab.unit || "—"}</td>
+                            <td class="reference">${referenceDisplay}</td>
+                            <td style="font-size: 11px; text-align: center;">
+                              ${lab.method || "—"}
+                            </td>
+                          </tr>
+                          ${
+                            lab.conclusion
+                              ? `
+                          <tr>
+                            <td colspan="5" style="padding: 10px; background: #F5F9FF;">
+                              <div class="conclusion-title">Заключение врача-лаборанта:</div>
+                              <div class="conclusion-text">${
+                                lab.conclusion
+                              }</div>
+                              ${
+                                lab.executedBy
+                                  ? `<div class="method-info" style="margin-top: 5px;">Исполнитель: ${lab.executedBy}</div>`
+                                  : ""
+                              }
+                            </td>
+                          </tr>
+                          `
+                              : ""
+                          }
+                        `;
+                      })
+                      .join("")}
+                  </tbody>
+                </table>
               `;
           })
           .join("")}
@@ -1591,7 +1751,7 @@ export default function PatientPage() {
               ${
                 blankAssignment.executedBy
                   ? `
-                <div class="method-info" style="margin-top: 4px;">Исполнитель: ${blankAssignment.executedBy}</div>
+                <div class="method-info" style="margin-top: 5px;">Исполнитель: ${blankAssignment.executedBy}</div>
               `
                   : ""
               }
@@ -1607,7 +1767,9 @@ export default function PatientPage() {
       }
       
       <div class="barcode">
-        <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjUwIiBoZWlnaHQ9IjUwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iNCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSI4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEzIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE2IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjIwIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjI0IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjI5IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjMyIiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjM2IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQwIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQ1IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjQ4IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjUyIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjU2IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjYxIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjY0IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjY4IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjcyIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijc3IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjgwIiB5PSIwIiB3aWR0aD0iMiIgaGVpZht0PSI0MCIvPjxyZWN0IHg9Ijg0IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijg4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjkzIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9Ijk2IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEwMCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMDQiIHk9IjAiIHdpZHRoPSIzIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTA5IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjExMiIgeT0iMCIgd2lkdGg9IjIiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMTYiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTIwIiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEyNSIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxMjgiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTMyIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjEzNiIgeT0iMCIgd2lkdGg9IjMiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNDEiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTQ0IiB5PSIwIiB3aWR0aD0iMiIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE0OCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNTIiIHk9IjAiIHdpZHRoPSIzIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTU3IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE2MCIgeT0iMCIgd2lkdGg9IjIiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNjQiIHk9IjAiIHdpZHRoPSIxIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTY4IiB5PSIwIiB3aWR0aD0iMyIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE3MyIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iNDAiLz48cmVjdCB4PSIxNzYiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTgwIiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE4NCIgeT0iMCIgd2lkdGgPSIzIiBoZWlnaHQ9IjQwIi8+PHJlY3QgeD0iMTg5IiB5PSIwIiB3aWR0aD0iMSIgaGVpZ2h0PSI0MCIvPjxyZWN0IHg9IjE5MiIgeT0iMCIgd2lkdGg9IjIiIGhlaWdodD0iNDAiLz48dGV4dCB4PSIxMjUiIHk9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iOCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+MjQxNjIwMjQtNTEwMDE5MjUtMjAyNDEyMDwvdGV4dD48L3N2Zz4=" alt="Barcode">
+       
+        <img src="https://barcode.tec-it.com/barcode.ashx?data=23022024${" "}2390845${" "}L-29083169&code=Code128&dpi=96&dataseparator=" alt="Barcode">
+        
       </div>
       
       <div class="disclaimer">
@@ -1860,15 +2022,36 @@ export default function PatientPage() {
                             {lab.result ? (
                               <>
                                 {cleanResult(lab.result)}
-                                {lab.referenceMin &&
+                                {lab.referenceText &&
+                                  lab.referenceText.startsWith("<") &&
+                                  parseFloat(
+                                    cleanResult(lab.result).replace(/[<>]/g, "")
+                                  ) >=
+                                    parseFloat(
+                                      lab.referenceText.replace(/[<>]/g, "")
+                                    ) && <ArrowUpIcon ml={1} color="red.500" />}
+                                {lab.referenceText &&
+                                  lab.referenceText.startsWith(">") &&
+                                  parseFloat(
+                                    cleanResult(lab.result).replace(/[<>]/g, "")
+                                  ) <=
+                                    parseFloat(
+                                      lab.referenceText.replace(/[<>]/g, "")
+                                    ) && (
+                                    <ArrowDownIcon ml={1} color="blue.500" />
+                                  )}
+                                {!lab.referenceText &&
+                                  lab.referenceMin &&
                                   lab.referenceMax &&
-                                  !isNaN(parseFloat(lab.result)) && (
+                                  !isNaN(
+                                    parseFloat(cleanResult(lab.result))
+                                  ) && (
                                     <>
-                                      {parseFloat(lab.result) >
+                                      {parseFloat(cleanResult(lab.result)) >
                                         parseFloat(lab.referenceMax) && (
                                         <ArrowUpIcon ml={1} color="red.500" />
                                       )}
-                                      {parseFloat(lab.result) <
+                                      {parseFloat(cleanResult(lab.result)) <
                                         parseFloat(lab.referenceMin) && (
                                         <ArrowDownIcon
                                           ml={1}
@@ -2071,180 +2254,331 @@ export default function PatientPage() {
         </TabPanels>
       </Tabs>
 
-      {/* Модальное окно добавления анализов */}
+      {/* Модальное окно добавления анализов - ОБНОВЛЕНО с добавлением бланков */}
       <Modal
         isOpen={isAddAnalysisOpen}
-        onClose={() => setIsAddAnalysisOpen(false)}
-        size="4xl"
+        onClose={() => {
+          setIsAddAnalysisOpen(false);
+          setModalSearchTerm("");
+          setSelectedDepartment(null);
+          setActiveTabIndex(0);
+        }}
+        size="6xl"
       >
         <ModalOverlay />
-        <ModalContent>
+        <ModalContent maxH="90vh">
           <ModalHeader>
-            Добавление анализов пациенту: {patientData.surname}{" "}
+            Добавление анализов и бланков пациенту: {patientData.surname}{" "}
             {patientData.name} {patientData.lastName || ""} (ID: {id})
           </ModalHeader>
           <ModalCloseButton />
-          <ModalBody>
-            <VStack align="stretch" spacing={4}>
-              {/* Поиск */}
-              <Box>
-                <Input
-                  placeholder="🔍 Поиск анализов и бланков..."
-                  value={searchAnalysisTerm}
-                  onChange={(e) => handleAnalysisSearch(e.target.value)}
-                  size="lg"
-                />
+          <ModalBody overflowY="auto">
+            {/* Вкладки для выбора типа */}
+            <Tabs
+              variant="enclosed"
+              colorScheme="blue"
+              mb={4}
+              index={activeTabIndex}
+              onChange={setActiveTabIndex}
+            >
+              <TabList>
+                <Tab>Стандартные анализы</Tab>
+                <Tab>Бланковые исследования</Tab>
+              </TabList>
 
-                {searchAnalysisTerm.length >= 2 &&
-                  filteredCategories.length > 0 && (
-                    <Box mt={2} p={3} bg="gray.50" borderRadius="md">
-                      <Text fontSize="sm" fontWeight="bold" mb={2}>
-                        Результаты поиска:
-                      </Text>
-                      <Grid templateColumns="repeat(2, 1fr)" gap={2}>
-                        {filteredCategories.map((item) => (
-                          <Card
-                            key={`${item.type}-${item.id}`}
-                            size="sm"
-                            cursor="pointer"
-                            onClick={() => handleSuggestionClick(item)}
-                            _hover={{
-                              bg:
-                                item.type === "analysis"
-                                  ? "blue.50"
-                                  : "purple.50",
-                            }}
-                            borderColor={
-                              item.type === "analysis"
-                                ? "blue.200"
-                                : "purple.200"
-                            }
-                            borderWidth="1px"
-                          >
-                            <CardBody p={2}>
-                              <HStack justify="space-between">
-                                <VStack align="start" spacing={0}>
-                                  <Badge
-                                    colorScheme={
-                                      item.type === "analysis"
-                                        ? "blue"
-                                        : "purple"
-                                    }
-                                    fontSize="xs"
-                                  >
-                                    {item.type === "analysis"
-                                      ? "Анализ"
-                                      : "Бланк"}{" "}
-                                    • {item.code || item.id}
-                                  </Badge>
-                                  <Text fontSize="sm" fontWeight="medium">
-                                    {item.name}
-                                  </Text>
-                                </VStack>
-                                <Text
-                                  fontSize="sm"
-                                  fontWeight="bold"
-                                  color="green.600"
-                                >
-                                  {(
-                                    item.basePrice ||
-                                    item.price ||
-                                    item.sum ||
-                                    0
-                                  ).toLocaleString()}{" "}
-                                  сум
-                                </Text>
-                              </HStack>
-                            </CardBody>
-                          </Card>
-                        ))}
-                      </Grid>
-                    </Box>
+              <TabPanels>
+                {/* Вкладка 1: Стандартные анализы */}
+                <TabPanel>
+                  {/* Вкладки с отделами */}
+                  <Tabs variant="enclosed" colorScheme="blue" mb={4}>
+                    <TabList overflowX="auto" py={2}>
+                      <Tab onClick={() => setSelectedDepartment(null)}>
+                        Все анализы
+                      </Tab>
+                      {Array.from(
+                        new Set(
+                          labCategories
+                            .map((cat) => cat.department)
+                            .filter(Boolean)
+                        )
+                      ).map((dept) => (
+                        <Tab
+                          key={dept}
+                          onClick={() => setSelectedDepartment(dept)}
+                        >
+                          {dept}
+                        </Tab>
+                      ))}
+                    </TabList>
+
+                    <TabPanels>
+                      <TabPanel>
+                        {/* Все анализы */}
+                        {filteredLabCategories.length > 0 ? (
+                          <SimpleGrid columns={2} spacing={4}>
+                            {filteredLabCategories.map((category) => (
+                              <AnalysisCard
+                                key={category.id}
+                                category={category}
+                                isSelected={selectedAnalyses.find(
+                                  (a) => a.categoryId === category.id
+                                )}
+                                onSelect={handleAnalysisSelect}
+                              />
+                            ))}
+                          </SimpleGrid>
+                        ) : (
+                          <Alert status="info">
+                            <AlertIcon />
+                            Нет доступных анализов
+                          </Alert>
+                        )}
+                      </TabPanel>
+
+                      {/* Отдельные вкладки для каждого отдела */}
+                      {Array.from(
+                        new Set(
+                          labCategories
+                            .map((cat) => cat.department)
+                            .filter(Boolean)
+                        )
+                      ).map((dept) => (
+                        <TabPanel key={dept}>
+                          <VStack align="stretch" spacing={4}>
+                            <Heading size="md" color="blue.700">
+                              {dept}
+                            </Heading>
+                            <SimpleGrid columns={2} spacing={4}>
+                              {labCategories
+                                .filter(
+                                  (cat) =>
+                                    cat.department === dept &&
+                                    cat.isActive !== false
+                                )
+                                .map((category) => (
+                                  <AnalysisCard
+                                    key={category.id}
+                                    category={category}
+                                    isSelected={selectedAnalyses.find(
+                                      (a) => a.categoryId === category.id
+                                    )}
+                                    onSelect={handleAnalysisSelect}
+                                  />
+                                ))}
+                            </SimpleGrid>
+                          </VStack>
+                        </TabPanel>
+                      ))}
+                    </TabPanels>
+                  </Tabs>
+                </TabPanel>
+
+                {/* Вкладка 2: Бланковые исследования */}
+                <TabPanel>
+                  {blanks.length > 0 ? (
+                    <SimpleGrid columns={2} spacing={4}>
+                      {blanks.map((blank) => (
+                        <BlankCard
+                          key={blank.id}
+                          blank={blank}
+                          isSelected={selectedBlankItems.find(
+                            (b) => b.id === blank.id
+                          )}
+                          onSelect={handleBlankSelect}
+                        />
+                      ))}
+                    </SimpleGrid>
+                  ) : (
+                    <Alert status="info">
+                      <AlertIcon />
+                      Бланки не найдены. Создайте бланки в разделе управления
+                      бланками.
+                    </Alert>
                   )}
-              </Box>
+                </TabPanel>
+              </TabPanels>
+            </Tabs>
 
-              {/* Выбранные элементы */}
-              {allSelectedItems.length > 0 && (
-                <Box>
-                  <Text fontWeight="bold" mb={2}>
-                    Выбрано ({allSelectedItems.length}):
-                  </Text>
-                  <VStack align="stretch" spacing={2}>
-                    {selectedAnalyses.map((analysis) => (
-                      <Card
-                        key={`sel-${analysis.categoryId}`}
-                        variant="outline"
-                        borderColor="blue.200"
-                      >
-                        <CardBody>
-                          <HStack justify="space-between">
-                            <VStack align="start" spacing={1}>
-                              <HStack>
-                                <Badge colorScheme="blue">Анализ</Badge>
-                                <Text fontWeight="medium">{analysis.name}</Text>
-                              </HStack>
-                              <Text fontSize="sm" color="gray.600">
-                                {analysis.sampleType}
-                              </Text>
-                            </VStack>
-                            <HStack>
-                              <Text fontWeight="bold" color="green.600">
-                                {analysis.price.toLocaleString()} сум
-                              </Text>
-                              <IconButton
-                                icon={<DeleteIcon />}
-                                size="sm"
-                                colorScheme="red"
-                                variant="ghost"
-                                onClick={() =>
-                                  removeAnalysis(analysis.categoryId)
-                                }
-                                aria-label="Удалить"
-                              />
-                            </HStack>
+            {/* Быстрый поиск внутри модального окна */}
+            <Box mb={4} position="relative">
+              <Input
+                placeholder="🔍 Поиск по названию или коду..."
+                value={modalSearchTerm}
+                onChange={(e) => setModalSearchTerm(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && modalSearchSuggestions.length > 0) {
+                    const item = modalSearchSuggestions[0];
+                    if (item.type === "analysis") {
+                      handleAnalysisSelect(item);
+                    } else {
+                      handleBlankSelect(item);
+                    }
+                    setModalSearchTerm("");
+                  }
+                }}
+              />
+              {modalSearchTerm && modalSearchSuggestions.length > 0 && (
+                <Box
+                  position="absolute"
+                  top="100%"
+                  left={0}
+                  right={0}
+                  bg="white"
+                  border="1px solid"
+                  borderColor="gray.200"
+                  borderRadius="md"
+                  shadow="lg"
+                  zIndex={1000}
+                  maxH="200px"
+                  overflowY="auto"
+                >
+                  {modalSearchSuggestions.map((item) => (
+                    <Box
+                      key={`${item.type}-${item.id}`}
+                      p={2}
+                      borderBottom="1px solid"
+                      borderColor="gray.100"
+                      cursor="pointer"
+                      _hover={{
+                        bg: item.type === "analysis" ? "blue.50" : "purple.50",
+                      }}
+                      onClick={() => {
+                        if (item.type === "analysis") {
+                          handleAnalysisSelect(item);
+                          setActiveTabIndex(0);
+                        } else {
+                          handleBlankSelect(item);
+                          setActiveTabIndex(1);
+                        }
+                        setModalSearchTerm("");
+                      }}
+                    >
+                      <HStack justify="space-between">
+                        <VStack align="start" spacing={0}>
+                          <HStack>
+                            <Badge
+                              colorScheme={
+                                item.type === "analysis" ? "blue" : "purple"
+                              }
+                              size="sm"
+                            >
+                              {item.type === "analysis" ? "Анализ" : "Бланк"}
+                            </Badge>
+                            <Text fontWeight="medium">{item.name}</Text>
                           </HStack>
-                        </CardBody>
-                      </Card>
-                    ))}
-
-                    {selectedBlankItems.map((blank) => (
-                      <Card
-                        key={`sel-blank-${blank.id}`}
-                        variant="outline"
-                        borderColor="purple.200"
-                      >
-                        <CardBody>
-                          <HStack justify="space-between">
-                            <VStack align="start" spacing={1}>
-                              <HStack>
-                                <Badge colorScheme="purple">Бланк</Badge>
-                                <Text fontWeight="medium">{blank.name}</Text>
-                              </HStack>
-                              <Text fontSize="sm" color="gray.600">
-                                {blank.sampleType}
-                              </Text>
-                            </VStack>
-                            <HStack>
-                              <Text fontWeight="bold" color="green.600">
-                                {blank.price.toLocaleString()} сум
-                              </Text>
-                              <IconButton
-                                icon={<DeleteIcon />}
-                                size="sm"
-                                colorScheme="red"
-                                variant="ghost"
-                                onClick={() => removeBlank(blank.id)}
-                                aria-label="Удалить"
-                              />
-                            </HStack>
+                          <HStack spacing={2}>
+                            {item.code && (
+                              <Badge colorScheme="blue" size="sm">
+                                {item.code}
+                              </Badge>
+                            )}
+                            {item.department && (
+                              <Badge colorScheme="purple" size="sm">
+                                {item.department}
+                              </Badge>
+                            )}
                           </HStack>
-                        </CardBody>
-                      </Card>
-                    ))}
-                  </VStack>
+                        </VStack>
+                        <Text fontWeight="bold" color="green.600">
+                          {(
+                            item.basePrice ||
+                            item.price ||
+                            item.sum ||
+                            0
+                          ).toLocaleString()}{" "}
+                          сум
+                        </Text>
+                      </HStack>
+                    </Box>
+                  ))}
                 </Box>
               )}
+            </Box>
 
+            {/* Выбранные элементы */}
+            {allSelectedItems.length > 0 && (
+              <Box>
+                <Text fontWeight="bold" mb={2}>
+                  Выбрано ({allSelectedItems.length}):
+                </Text>
+                <VStack align="stretch" spacing={2}>
+                  {selectedAnalyses.map((analysis) => (
+                    <Card
+                      key={`sel-${analysis.categoryId}`}
+                      variant="outline"
+                      borderColor="blue.200"
+                    >
+                      <CardBody>
+                        <HStack justify="space-between">
+                          <VStack align="start" spacing={1}>
+                            <HStack>
+                              <Badge colorScheme="blue">Анализ</Badge>
+                              <Text fontWeight="medium">{analysis.name}</Text>
+                            </HStack>
+                            <Text fontSize="sm" color="gray.600">
+                              {analysis.sampleType}
+                            </Text>
+                          </VStack>
+                          <HStack>
+                            <Text fontWeight="bold" color="green.600">
+                              {analysis.price.toLocaleString()} сум
+                            </Text>
+                            <IconButton
+                              icon={<DeleteIcon />}
+                              size="sm"
+                              colorScheme="red"
+                              variant="ghost"
+                              onClick={() =>
+                                removeAnalysis(analysis.categoryId)
+                              }
+                              aria-label="Удалить"
+                            />
+                          </HStack>
+                        </HStack>
+                      </CardBody>
+                    </Card>
+                  ))}
+
+                  {selectedBlankItems.map((blank) => (
+                    <Card
+                      key={`sel-blank-${blank.id}`}
+                      variant="outline"
+                      borderColor="purple.200"
+                    >
+                      <CardBody>
+                        <HStack justify="space-between">
+                          <VStack align="start" spacing={1}>
+                            <HStack>
+                              <Badge colorScheme="purple">Бланк</Badge>
+                              <Text fontWeight="medium">{blank.name}</Text>
+                            </HStack>
+                            <Text fontSize="sm" color="gray.600">
+                              {blank.sampleType}
+                            </Text>
+                          </VStack>
+                          <HStack>
+                            <Text fontWeight="bold" color="green.600">
+                              {blank.price.toLocaleString()} сум
+                            </Text>
+                            <IconButton
+                              icon={<DeleteIcon />}
+                              size="sm"
+                              colorScheme="red"
+                              variant="ghost"
+                              onClick={() => removeBlank(blank.id)}
+                              aria-label="Удалить"
+                            />
+                          </HStack>
+                        </HStack>
+                      </CardBody>
+                    </Card>
+                  ))}
+                </VStack>
+              </Box>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <VStack align="stretch" spacing={4} w="100%">
               {/* Оплата */}
               <Divider />
               <SimpleGrid columns={2} spacing={4}>
@@ -2265,11 +2599,29 @@ export default function PatientPage() {
                   <Input
                     type="number"
                     value={paidAmount}
-                    onChange={(e) =>
-                      setPaidAmount(parseFloat(e.target.value) || 0)
-                    }
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setPaidAmount(value);
+                    }}
                     placeholder="0"
                   />
+                  <HStack mt={2}>
+                    <Button
+                      size="xs"
+                      colorScheme="teal"
+                      onClick={() => setPaidAmount(finalAmount.toString())}
+                    >
+                      Оплатить полностью
+                    </Button>
+                    <Button
+                      size="xs"
+                      colorScheme="red"
+                      variant="outline"
+                      onClick={() => setPaidAmount("")}
+                    >
+                      Сбросить
+                    </Button>
+                  </HStack>
                 </FormControl>
               </SimpleGrid>
 
@@ -2318,24 +2670,34 @@ export default function PatientPage() {
                   </Box>
                 </HStack>
               </Box>
+
+              <HStack justify="space-between">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setIsAddAnalysisOpen(false);
+                    setModalSearchTerm("");
+                    setSelectedDepartment(null);
+                    setActiveTabIndex(0);
+                  }}
+                >
+                  Отмена
+                </Button>
+                <HStack>
+                  <Badge colorScheme="blue" p={2}>
+                    Выбрано: {allSelectedItems.length}
+                  </Badge>
+                  <Button
+                    colorScheme="blue"
+                    onClick={handleAddAnalyses}
+                    isDisabled={allSelectedItems.length === 0}
+                    isLoading={loading}
+                  >
+                    Добавить ({allSelectedItems.length})
+                  </Button>
+                </HStack>
+              </HStack>
             </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="ghost"
-              mr={3}
-              onClick={() => setIsAddAnalysisOpen(false)}
-            >
-              Отмена
-            </Button>
-            <Button
-              colorScheme="blue"
-              onClick={handleAddAnalyses}
-              isDisabled={allSelectedItems.length === 0}
-              isLoading={loading}
-            >
-              Добавить ({allSelectedItems.length})
-            </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
