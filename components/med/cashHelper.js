@@ -1,6 +1,8 @@
 // utils/cashHelper.js
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://punk-regulation-introduced-tourism.trycloudflare.com";
 
 // Явно экспортируемые функции
 export const fetchCashRecords = async () => {
@@ -33,7 +35,7 @@ export const createCashboxRecord = async ({
   try {
     const totalSum = services.reduce(
       (sum, s) => sum + (s.sum || s.price || 0),
-      0
+      0,
     );
 
     const cashboxData = {
