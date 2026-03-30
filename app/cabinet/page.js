@@ -111,6 +111,11 @@ function Cabinet() {
   const [activeTab, setActiveTab] = useState("labs");
   const toast = useToast();
   const api = getApiBaseUrl();
+  const [labPage, setLabPage] = useState(1);
+  const [labTotal, setLabTotal] = useState(0);
+  const [blankPage, setBlankPage] = useState(1);
+  const [blankTotal, setBlankTotal] = useState(0);
+  const LAB_PAGE_SIZE = 100;
 
   // Модальные окна
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -162,67 +167,24 @@ function Cabinet() {
   }, []);
 
   // Загрузка данных
-  const loadLabTests = async () => {
+  const loadLabTests = async (page = 1) => {
     setLoading(true);
     try {
-      const response = await fetch(`${api}/labs`);
+      const response = await fetch(
+        `${api}/labs?page=${page}&limit=${LAB_PAGE_SIZE}`,
+      );
       if (!response.ok) throw new Error("Ошибка загрузки анализов");
 
-      const data = await response.json();
+      const { data, total } = await response.json();
 
-      const testsWithDetails = await Promise.all(
-        data.map(async (test) => {
-          try {
-            // Загружаем данные клиента
-            const clientResponse = await fetch(
-              `${api}/client/${test.clientId}`
-            );
-            const client = clientResponse.ok
-              ? await clientResponse.json()
-              : null;
-
-            // Загружаем данные категории для референтных значений
-            const categoryResponse = await fetch(
-              `${api}/lab-category/${test.categoryId || test.labCategoryId}`
-            );
-            const category = categoryResponse.ok
-              ? await categoryResponse.json()
-              : null;
-
-            return {
-              ...test,
-              client,
-              category,
-              // ВАЖНО: Сохраняем отделение из категории
-              department: category?.department || test.department,
-              // Автоматически берем референтные значения из категории
-              unit: category?.unit || test.unit,
-              referenceMin:
-                category?.normalRange?.split("-")[0] ||
-                category?.referenceValue?.split("-")[0] ||
-                test.referenceMin,
-              referenceMax:
-                category?.normalRange?.split("-")[1] ||
-                category?.referenceValue?.split("-")[1] ||
-                test.referenceMax,
-              referenceText:
-                category?.normalRange ||
-                category?.referenceValue ||
-                test.referenceText,
-            };
-          } catch (err) {
-            console.error(`Ошибка загрузки данных для теста ${test.id}:`, err);
-            return test;
-          }
-        })
-      );
-
-      setLabTests(testsWithDetails);
+      // Больше НЕТ Promise.all с N+1 запросами — всё пришло через JOIN!
+      setLabTests(page === 1 ? data : (prev) => [...prev, ...data]);
+      setLabTotal(total);
+      setLabPage(page);
     } catch (error) {
-      console.error("Ошибка загрузки анализов:", error);
       toast({
         title: "Ошибка",
-        description: "Не удалось загрузить список анализов",
+        description: "Не удалось загрузить анализы",
         status: "error",
       });
     } finally {
@@ -230,48 +192,26 @@ function Cabinet() {
     }
   };
 
-  const loadBlankAssignments = async () => {
+  // Новая loadBlankAssignments — без N+1
+
+  const loadBlankAssignments = async (page = 1) => {
     setLoadingBlanks(true);
     try {
-      const response = await fetch(`${api}/blank-assignments`);
-      if (!response.ok) throw new Error("Ошибка загрузки бланков");
-
-      const data = await response.json();
-
-      const assignmentsWithDetails = await Promise.all(
-        data.map(async (assignment) => {
-          try {
-            // Загружаем данные клиента
-            const clientResponse = await fetch(
-              `${api}/client/${assignment.clientId}`
-            );
-            const client = clientResponse.ok
-              ? await clientResponse.json()
-              : null;
-
-            // Загружаем данные бланка
-            const blankResponse = await fetch(
-              `${api}/blank/${assignment.blankId}`
-            );
-            const blank = blankResponse.ok ? await blankResponse.json() : null;
-
-            return { ...assignment, client, blank };
-          } catch (err) {
-            console.error(
-              `Ошибка загрузки данных для назначения ${assignment.id}:`,
-              err
-            );
-            return assignment;
-          }
-        })
+      const response = await fetch(
+        `${api}/blank-assignments?page=${page}&limit=${LAB_PAGE_SIZE}`,
       );
+      if (!response.ok) throw new Error();
 
-      setBlankAssignments(assignmentsWithDetails);
+      const { data, total } = await response.json();
+
+      // Данные уже содержат client и blank через JOIN
+      setBlankAssignments(page === 1 ? data : (prev) => [...prev, ...data]);
+      setBlankTotal(total);
+      setBlankPage(page);
     } catch (error) {
-      console.error("Ошибка загрузки бланков:", error);
       toast({
         title: "Ошибка",
-        description: "Не удалось загрузить список бланков",
+        description: "Не удалось загрузить бланки",
         status: "error",
       });
     } finally {
@@ -312,7 +252,7 @@ function Cabinet() {
     setSelectedBlank(assignment);
     setIsEditing(!viewOnly);
     setBlankContent(
-      assignment.filledContent || assignment.blank?.content || ""
+      assignment.filledContent || assignment.blank?.content || "",
     );
     if (viewOnly) {
       onViewOpen();
@@ -420,7 +360,7 @@ function Cabinet() {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(updateData),
-        }
+        },
       );
 
       if (!response.ok) throw new Error("Ошибка сохранения бланка");
@@ -445,7 +385,7 @@ function Cabinet() {
     }
   };
 
-  // Обработчик изменений в табличном бланке
+  // Обработчик изменений в табличном бланке с навигацией
   const handleTableCellChange = (rowIndex, cellIndex, value) => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(blankContent, "text/html");
@@ -456,16 +396,13 @@ function Cabinet() {
       if (rows[rowIndex]) {
         const cells = rows[rowIndex].querySelectorAll("td, th");
         if (cells[cellIndex]) {
-          // Находим ячейки с contenteditable="true" (желтые)
           const editableCell =
             cells[cellIndex].querySelector('[contenteditable="true"]') ||
             cells[cellIndex];
           if (editableCell.getAttribute("contenteditable") === "true") {
             editableCell.textContent = value;
 
-            // Если это числовое значение, проверяем на отклонения
             if (!isNaN(parseFloat(value))) {
-              // Находим ячейку с референтными значениями (обычно последняя в ряду)
               const refCell = cells[cells.length - 1];
               if (refCell && refCell.textContent.includes("-")) {
                 const [min, max] = refCell.textContent
@@ -474,9 +411,9 @@ function Cabinet() {
                 const currentValue = parseFloat(value);
 
                 if (currentValue < min || currentValue > max) {
-                  editableCell.style.backgroundColor = "#fed7d7"; // красный для отклонений
+                  editableCell.style.backgroundColor = "#fed7d7";
                 } else {
-                  editableCell.style.backgroundColor = "#ffffcc"; // желтый для нормы
+                  editableCell.style.backgroundColor = "#ffffcc";
                 }
               }
             }
@@ -488,7 +425,350 @@ function Cabinet() {
     setBlankContent(doc.body.innerHTML);
   };
 
-  // Функция для подсветки отклонений
+  // Упрощенная версия с прямым доступом к DOM
+  // Навигация по таблице стрелками и Enter/Tab
+  const handleTableKeyDown = (e) => {
+    const target = e.target;
+
+    // Проверяем что мы в редактируемой ячейке
+    if (target.contentEditable !== "true") return;
+
+    // Находим родительскую ячейку TD/TH
+    let cell = target;
+    while (cell && cell.nodeName !== "TD" && cell.nodeName !== "TH") {
+      cell = cell.parentElement;
+      if (!cell || cell.nodeName === "TABLE") return;
+    }
+
+    if (!cell) return;
+
+    const row = cell.parentElement;
+    if (!row) return;
+
+    const table = row.closest("table");
+    if (!table) return;
+
+    // Получаем ВСЕ ячейки таблицы
+    const allCells = Array.from(table.querySelectorAll("td, th"));
+
+    // Фильтруем только редактируемые ячейки
+    const editableCells = allCells.filter((cell) => {
+      // Ячейка редактируема если:
+      // 1. Сама ячейка contenteditable="true"
+      // 2. Или содержит элемент с contenteditable="true"
+      return (
+        cell.getAttribute("contenteditable") === "true" ||
+        cell.querySelector('[contenteditable="true"]')
+      );
+    });
+
+    if (editableCells.length === 0) return;
+
+    // Находим текущую редактируемую ячейку
+    let currentCell = cell;
+    // Если текущая ячейка не редактируема, но содержит редактируемый элемент
+    if (!editableCells.includes(cell)) {
+      const editableParent = cell.querySelector('[contenteditable="true"]');
+      if (editableParent) {
+        // Находим родительскую ячейку этого элемента
+        let parent = editableParent;
+        while (
+          parent &&
+          parent !== table &&
+          parent.nodeName !== "TD" &&
+          parent.nodeName !== "TH"
+        ) {
+          parent = parent.parentElement;
+        }
+        if (parent && (parent.nodeName === "TD" || parent.nodeName === "TH")) {
+          currentCell = parent;
+        }
+      }
+    }
+
+    const currentIndex = editableCells.indexOf(currentCell);
+    if (currentIndex === -1) return;
+
+    // Получаем координаты текущей ячейки
+    const currentRect = currentCell.getBoundingClientRect();
+    const currentCenterX = currentRect.left + currentRect.width / 2;
+    const currentCenterY = currentRect.top + currentRect.height / 2;
+
+    let nextCell = null;
+    let shouldPreventDefault = false;
+
+    // Проверяем позицию курсора для стрелок влево/вправо
+    const selection = window.getSelection();
+    const cursorPosition = selection.focusOffset;
+    const textLength = target.textContent?.length || 0;
+
+    switch (e.key) {
+      case "ArrowDown":
+        shouldPreventDefault = true;
+
+        // Ищем ближайшую ячейку ниже текущей примерно в той же колонке
+        let closestDown = null;
+        let minDistanceDown = Infinity;
+
+        for (let i = 0; i < editableCells.length; i++) {
+          if (i === currentIndex) continue;
+
+          const testCell = editableCells[i];
+          const testRect = testCell.getBoundingClientRect();
+
+          // Ячейка должна быть ниже текущей
+          if (testRect.top > currentRect.bottom) {
+            // Проверяем горизонтальное совпадение
+            const horizontalOverlap =
+              testRect.left <= currentCenterX &&
+              testRect.right >= currentCenterX;
+
+            if (horizontalOverlap) {
+              const distance = testRect.top - currentRect.bottom;
+              if (distance < minDistanceDown) {
+                minDistanceDown = distance;
+                closestDown = testCell;
+              }
+            }
+          }
+        }
+
+        // Если не нашли точно под текущей, берем следующую в массиве
+        if (!closestDown) {
+          nextCell = editableCells[currentIndex + 1] || editableCells[0];
+        } else {
+          nextCell = closestDown;
+        }
+        break;
+
+      case "ArrowUp":
+        shouldPreventDefault = true;
+
+        // Ищем ближайшую ячейку выше текущей примерно в той же колонке
+        let closestUp = null;
+        let minDistanceUp = Infinity;
+
+        for (let i = 0; i < editableCells.length; i++) {
+          if (i === currentIndex) continue;
+
+          const testCell = editableCells[i];
+          const testRect = testCell.getBoundingClientRect();
+
+          // Ячейка должна быть выше текущей
+          if (testRect.bottom < currentRect.top) {
+            // Проверяем горизонтальное совпадение
+            const horizontalOverlap =
+              testRect.left <= currentCenterX &&
+              testRect.right >= currentCenterX;
+
+            if (horizontalOverlap) {
+              const distance = currentRect.top - testRect.bottom;
+              if (distance < minDistanceUp) {
+                minDistanceUp = distance;
+                closestUp = testCell;
+              }
+            }
+          }
+        }
+
+        // Если не нашли точно над текущей, берем предыдущую в массиве
+        if (!closestUp) {
+          nextCell =
+            editableCells[currentIndex - 1] ||
+            editableCells[editableCells.length - 1];
+        } else {
+          nextCell = closestUp;
+        }
+        break;
+
+      case "ArrowRight":
+        if (cursorPosition < textLength && textLength > 0) {
+          // Разрешаем движение курсора внутри текста
+          shouldPreventDefault = false;
+        } else {
+          shouldPreventDefault = true;
+
+          // Ищем ближайшую ячейку справа в той же строке
+          let closestRight = null;
+          let minDistanceRight = Infinity;
+
+          for (let i = 0; i < editableCells.length; i++) {
+            if (i === currentIndex) continue;
+
+            const testCell = editableCells[i];
+            const testRect = testCell.getBoundingClientRect();
+
+            // Ячейка должна быть справа от текущей и примерно на той же высоте
+            const verticalOverlap =
+              Math.abs(testRect.top - currentRect.top) < currentRect.height / 2;
+
+            if (testRect.left > currentRect.right && verticalOverlap) {
+              const distance = testRect.left - currentRect.right;
+              if (distance < minDistanceRight) {
+                minDistanceRight = distance;
+                closestRight = testCell;
+              }
+            }
+          }
+
+          if (!closestRight) {
+            nextCell = editableCells[currentIndex + 1] || editableCells[0];
+          } else {
+            nextCell = closestRight;
+          }
+        }
+        break;
+
+      case "ArrowLeft":
+        if (cursorPosition > 0 && textLength > 0) {
+          // Разрешаем движение курсора внутри текста
+          shouldPreventDefault = false;
+        } else {
+          shouldPreventDefault = true;
+
+          // Ищем ближайшую ячейку слева в той же строке
+          let closestLeft = null;
+          let minDistanceLeft = Infinity;
+
+          for (let i = 0; i < editableCells.length; i++) {
+            if (i === currentIndex) continue;
+
+            const testCell = editableCells[i];
+            const testRect = testCell.getBoundingClientRect();
+
+            // Ячейка должна быть слева от текущей и примерно на той же высоте
+            const verticalOverlap =
+              Math.abs(testRect.top - currentRect.top) < currentRect.height / 2;
+
+            if (testRect.right < currentRect.left && verticalOverlap) {
+              const distance = currentRect.left - testRect.right;
+              if (distance < minDistanceLeft) {
+                minDistanceLeft = distance;
+                closestLeft = testCell;
+              }
+            }
+          }
+
+          if (!closestLeft) {
+            nextCell =
+              editableCells[currentIndex - 1] ||
+              editableCells[editableCells.length - 1];
+          } else {
+            nextCell = closestLeft;
+          }
+        }
+        break;
+
+      case "Tab":
+        shouldPreventDefault = true;
+        if (e.shiftKey) {
+          nextCell =
+            editableCells[currentIndex - 1] ||
+            editableCells[editableCells.length - 1];
+        } else {
+          nextCell = editableCells[currentIndex + 1] || editableCells[0];
+        }
+        break;
+
+      case "Enter":
+        shouldPreventDefault = true;
+        // Enter работает как стрелка вниз
+        let closestEnter = null;
+        let minDistanceEnter = Infinity;
+
+        for (let i = 0; i < editableCells.length; i++) {
+          if (i === currentIndex) continue;
+
+          const testCell = editableCells[i];
+          const testRect = testCell.getBoundingClientRect();
+
+          if (testRect.top > currentRect.bottom) {
+            const horizontalOverlap =
+              testRect.left <= currentCenterX &&
+              testRect.right >= currentCenterX;
+
+            if (horizontalOverlap) {
+              const distance = testRect.top - currentRect.bottom;
+              if (distance < minDistanceEnter) {
+                minDistanceEnter = distance;
+                closestEnter = testCell;
+              }
+            }
+          }
+        }
+
+        if (!closestEnter) {
+          nextCell = editableCells[currentIndex + 1] || editableCells[0];
+        } else {
+          nextCell = closestEnter;
+        }
+        break;
+    }
+
+    if (shouldPreventDefault) {
+      e.preventDefault();
+    }
+
+    // Переходим на следующую ячейку
+    if (nextCell) {
+      setTimeout(() => {
+        // Находим редактируемый элемент внутри ячейки
+        let editableElement = nextCell;
+        if (nextCell.getAttribute("contenteditable") !== "true") {
+          editableElement =
+            nextCell.querySelector('[contenteditable="true"]') || nextCell;
+        }
+
+        editableElement.focus();
+
+        // Выделяем весь текст для быстрой замены
+        try {
+          const range = document.createRange();
+          const sel = window.getSelection();
+
+          if (
+            editableElement.textContent &&
+            editableElement.textContent.trim().length > 0
+          ) {
+            range.selectNodeContents(editableElement);
+          } else {
+            range.selectNodeContents(editableElement);
+            range.collapse(true);
+          }
+
+          sel.removeAllRanges();
+          sel.addRange(range);
+        } catch (err) {
+          console.error("Ошибка выделения текста:", err);
+        }
+      }, 10);
+    }
+  };
+  const getCellColumn = (cell, table) => {
+    if (!cell || !table) return -1;
+
+    const row = cell.parentElement;
+    if (!row) return -1;
+
+    const cellsInRow = Array.from(row.children);
+    let column = 0;
+
+    for (let i = 0; i < cellsInRow.length; i++) {
+      const currentCell = cellsInRow[i];
+
+      // Если это наша ячейка - возвращаем текущую колонку
+      if (currentCell === cell) {
+        return column;
+      }
+
+      // Учитываем colspan
+      const colspan = parseInt(currentCell.getAttribute("colspan") || "1");
+      column += colspan;
+    }
+
+    return -1; // Ячейка не найдена в строке
+  };
+  // Также обновите функцию highlightDeviations для лучшей совместимости
   const highlightDeviations = (content) => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(content, "text/html");
@@ -497,43 +777,58 @@ function Cabinet() {
     tables.forEach((table) => {
       const rows = table.querySelectorAll("tr");
       rows.forEach((row, rowIndex) => {
-        if (rowIndex === 0) return; // Пропускаем заголовок
-
         const cells = row.querySelectorAll("td");
-        if (cells.length >= 5) {
-          // Предполагаем формат: №, Показатель, Результат, Ед. изм., Референтные значения
-          const resultCell = cells[2];
-          const refCell = cells[4];
 
-          if (resultCell && refCell) {
-            const result = resultCell.textContent.trim();
-            const ref = refCell.textContent.trim();
+        // Пытаемся найти ячейки с результатами и референтными значениями
+        cells.forEach((cell, cellIndex) => {
+          // Проверяем, содержит ли ячейка числовое значение
+          const text = cell.textContent.trim();
+          const numValue = parseFloat(text);
 
-            if (result && ref.includes("-")) {
-              const [min, max] = ref
-                .split("-")
-                .map((v) => parseFloat(v.trim()));
-              const currentValue = parseFloat(result);
+          if (!isNaN(numValue)) {
+            // Ищем референтные значения в соседних ячейках или в заголовке таблицы
+            let refText = "";
 
-              if (!isNaN(currentValue) && !isNaN(min) && !isNaN(max)) {
-                if (currentValue < min || currentValue > max) {
-                  resultCell.style.backgroundColor = "#fed7d7";
-                  resultCell.style.color = "#c53030";
-                  resultCell.style.fontWeight = "bold";
+            // Проверяем ячейку справа (часто там референтные значения)
+            if (cells[cellIndex + 1]) {
+              refText = cells[cellIndex + 1].textContent.trim();
+            }
+
+            // Если не нашли справа, проверяем заголовок колонки
+            if (!refText && rowIndex === 0) {
+              const headerRow = rows[0];
+              if (headerRow) {
+                const headerCells = headerRow.querySelectorAll("th, td");
+                if (headerCells[cellIndex]) {
+                  refText = headerCells[cellIndex].textContent.trim();
+                }
+              }
+            }
+
+            // Проверяем диапазон
+            if (refText && refText.includes("-")) {
+              const [minStr, maxStr] = refText.split("-").map((s) => s.trim());
+              const min = parseFloat(minStr);
+              const max = parseFloat(maxStr);
+
+              if (!isNaN(min) && !isNaN(max)) {
+                if (numValue < min || numValue > max) {
+                  cell.style.backgroundColor = "#fed7d7";
+                  cell.style.color = "#c53030";
+                  cell.style.fontWeight = "bold";
                 } else {
-                  resultCell.style.backgroundColor = "#c6f6d5";
-                  resultCell.style.color = "#22543d";
+                  cell.style.backgroundColor = "#c6f6d5";
+                  cell.style.color = "#22543d";
                 }
               }
             }
           }
-        }
+        });
       });
     });
 
     return doc.body.innerHTML;
   };
-
   // Фильтрация и статистика
   const filteredLabTests = useMemo(() => {
     return labTests.filter((test) => {
@@ -1055,7 +1350,7 @@ function Cabinet() {
                                         </Td>
                                         <Td fontSize="xs">
                                           {new Date(
-                                            test.createdAt
+                                            test.createdAt,
                                           ).toLocaleDateString("ru-RU")}
                                         </Td>
                                       </Tr>
@@ -1079,6 +1374,19 @@ function Cabinet() {
                             )}
                           </CardBody>
                         </Card>
+                        {labTests.length < labTotal && (
+                          <Flex justify="center" py={4}>
+                            <Button
+                              onClick={() => loadLabTests(labPage + 1)}
+                              isLoading={loading}
+                              colorScheme="blue"
+                              variant="outline"
+                            >
+                              Загрузить ещё ({labTotal - labTests.length}{" "}
+                              осталось)
+                            </Button>
+                          </Flex>
+                        )}
                       </TabPanel>
 
                       {/* Вкладка табличных бланков */}
@@ -1194,7 +1502,7 @@ function Cabinet() {
                                           </Td>
                                           <Td fontSize="xs">
                                             {new Date(
-                                              assignment.createdAt
+                                              assignment.createdAt,
                                             ).toLocaleDateString("ru-RU")}
                                           </Td>
                                           <Td>
@@ -1225,7 +1533,7 @@ function Cabinet() {
                                             </HStack>
                                           </Td>
                                         </Tr>
-                                      )
+                                      ),
                                     )}
                                   </Tbody>
                                 </Table>
@@ -1298,7 +1606,7 @@ function Cabinet() {
                                                   stats.completedBlanks) /
                                                   (stats.totalTests +
                                                     stats.totalBlanks)) *
-                                                  100
+                                                  100,
                                               )
                                             : 0}
                                           %
@@ -1397,8 +1705,8 @@ function Cabinet() {
                         {selectedTest.client?.sex === 1
                           ? "М"
                           : selectedTest.client?.sex === 0
-                          ? "Ж"
-                          : "—"}
+                            ? "Ж"
+                            : "—"}
                       </Text>
                       <Text fontSize="sm">
                         <strong>Врач:</strong>{" "}
@@ -1634,6 +1942,7 @@ function Cabinet() {
                       __html: highlightDeviations(blankContent),
                     }}
                     onBlur={(e) => setBlankContent(e.currentTarget.innerHTML)}
+                    onKeyDown={handleTableKeyDown}
                     contentEditable={true}
                     style={{
                       outline: "none",
@@ -1704,7 +2013,7 @@ function Cabinet() {
                         <strong>Дата готовности:</strong>{" "}
                         {selectedBlank.readyDate
                           ? new Date(selectedBlank.readyDate).toLocaleString(
-                              "ru-RU"
+                              "ru-RU",
                             )
                           : "—"}
                       </Text>
@@ -1728,7 +2037,7 @@ function Cabinet() {
                       __html: highlightDeviations(
                         selectedBlank.filledContent ||
                           selectedBlank.blank?.content ||
-                          ""
+                          "",
                       ),
                     }}
                   />

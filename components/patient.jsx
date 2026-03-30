@@ -999,6 +999,7 @@ export default function PatientPage() {
       return str;
     }
 
+    // Проверяем, является ли строка числом
     const numStr = str.replace(/,/g, ".");
     const num = parseFloat(numStr);
 
@@ -1107,6 +1108,7 @@ export default function PatientPage() {
       return acc;
     }, {});
 
+    // Функция создания шапки документа
     const createHeader = () => `
     <div class="header">
       <div class="header-left">
@@ -1151,6 +1153,7 @@ export default function PatientPage() {
     </div>
   `;
 
+    // Функция создания футера
     const createFooter = () => `
     <div class="barcode">
       <img src="https://barcode.tec-it.com/barcode.ashx?data=23022024${" "}2390845${" "}L-29083169&code=Code128&dpi=96&dataseparator=" alt="Barcode">
@@ -1166,46 +1169,59 @@ export default function PatientPage() {
     </div>
   `;
 
+    // Функция создания watermark
     const createWatermark = () => `
     <div class="watermark">
       <img src="/lab.svg" alt="Laboratory Federation Logo">
     </div>
   `;
 
-    const allTests = [];
-
-    Object.entries(departmentGroups).forEach(([department, deptResults]) => {
-      deptResults.forEach((lab, idx) => {
-        allTests.push({
-          type: "regular",
-          department,
-          isFirstInDept: idx === 0,
-          ...lab,
-        });
-      });
-    });
-
-    if (blankResults && blankResults.length > 0) {
-      blankResults.forEach((blankAssignment) => {
-        allTests.push({
-          type: "blank",
-          department: "Бланковые исследования",
-          blankData: blankAssignment,
-        });
-      });
-    }
-
-    const TESTS_PER_PAGE = 15;
+    // Создаем структуру страниц с учетом отделений
+    const TESTS_PER_PAGE = 12;
     const pages = [];
+    let currentPage = [];
+    let currentPageCount = 0;
 
-    for (let i = 0; i < allTests.length; i += TESTS_PER_PAGE) {
-      pages.push(allTests.slice(i, i + TESTS_PER_PAGE));
+    // ВАЖНО: Работаем только если есть результаты
+    if (Object.keys(departmentGroups).length > 0) {
+      Object.entries(departmentGroups).forEach(([department, deptResults]) => {
+        // Если отделение не влезает на текущую страницу, начинаем новую
+        if (
+          currentPageCount > 0 &&
+          currentPageCount + deptResults.length > TESTS_PER_PAGE
+        ) {
+          pages.push([...currentPage]);
+          currentPage = [];
+          currentPageCount = 0;
+        }
+
+        // Если отделение слишком большое, разбиваем его
+        if (deptResults.length > TESTS_PER_PAGE) {
+          for (let i = 0; i < deptResults.length; i += TESTS_PER_PAGE) {
+            const chunk = deptResults.slice(i, i + TESTS_PER_PAGE);
+            pages.push(
+              chunk.map((lab) => ({
+                ...lab,
+                department,
+                isFirstInDept: i === 0,
+              })),
+            );
+          }
+        } else {
+          // Добавляем все анализы отделения на текущую страницу
+          deptResults.forEach((lab, idx) => {
+            currentPage.push({ ...lab, department, isFirstInDept: idx === 0 });
+          });
+          currentPageCount += deptResults.length;
+        }
+      });
+
+      if (currentPage.length > 0) {
+        pages.push(currentPage);
+      }
     }
 
-    if (pages.length === 0) {
-      pages.push([]);
-    }
-
+    // Функция генерации таблицы результатов
     const generateResultsTable = (pageTests) => {
       let lastDepartment = null;
       return `
@@ -1221,102 +1237,69 @@ export default function PatientPage() {
         </thead>
         <tbody>
           ${pageTests
-            .map((item) => {
+            .map((lab) => {
               let departmentHeader = "";
-              if (item.department !== lastDepartment) {
-                lastDepartment = item.department;
+              if (lab.department !== lastDepartment) {
+                lastDepartment = lab.department;
                 departmentHeader = `
                 <tr>
-                  <td colspan="5" class="department-title">${item.department}</td>
+                  <td colspan="5" class="department-title">${lab.department}</td>
                 </tr>
               `;
               }
 
-              if (item.type === "blank") {
-                const blankName =
-                  item.blankData.blank?.name || "Бланковое исследование";
-                let blankContent =
-                  item.blankData.filledContent ||
-                  item.blankData.blank?.content ||
-                  "Содержимое не заполнено";
-
-                return `
-                  ${departmentHeader}
-                  <tr class="blank-row-wrapper">
-                    <td colspan="5" class="blank-row">
-                      <div class="blank-name">${blankName}</div>
-                      <div class="blank-content-inline">
-                        ${blankContent}
-                      </div>
-                      ${
-                        item.blankData.conclusion
-                          ? `
-                        <div class="conclusion-section">
-                          <div class="conclusion-title">Заключение:</div>
-                          <div class="conclusion-text">${item.blankData.conclusion}</div>
-                          ${item.blankData.executedBy ? `<div class="method-info">Исполнитель: ${item.blankData.executedBy}</div>` : ""}
-                        </div>
-                      `
-                          : ""
-                      }
-                    </td>
-                  </tr>
-                `;
-              }
-
-              // ОБЫЧНЫЙ АНАЛИЗ
               let referenceDisplay = "—";
-              if (item.referenceText) {
-                referenceDisplay = item.referenceText;
+              if (lab.referenceText) {
+                referenceDisplay = lab.referenceText;
               } else if (
-                item.referenceMin !== null &&
-                item.referenceMax !== null
+                lab.referenceMin !== null &&
+                lab.referenceMax !== null
               ) {
-                const min = parseFloat(item.referenceMin);
-                const max = parseFloat(item.referenceMax);
+                const min = parseFloat(lab.referenceMin);
+                const max = parseFloat(lab.referenceMax);
                 if (!isNaN(min) && !isNaN(max)) {
                   referenceDisplay = `${min} - ${max}`;
                 }
-              } else if (item.norma) {
-                referenceDisplay = item.norma;
+              } else if (lab.norma) {
+                referenceDisplay = lab.norma;
               }
 
-              const cleanedResult = cleanResult(item.result);
+              const cleanedResult = cleanResult(lab.result);
               const arrow = getArrow(
-                item.result,
-                item.referenceMin,
-                item.referenceMax,
-                item.referenceText,
+                lab.result,
+                lab.referenceMin,
+                lab.referenceMax,
+                lab.referenceText,
               );
               const isAbnormal = checkAbnormal(
-                item.result,
-                item.referenceMin,
-                item.referenceMax,
-                item.referenceText,
+                lab.result,
+                lab.referenceMin,
+                lab.referenceMax,
+                lab.referenceText,
               );
 
               return `
               ${departmentHeader}
               <tr${isAbnormal ? ' class="abnormal"' : ""}>
                 <td class="test-name">
-                  <div>${item.name}</div>
-                  ${item.testCode ? `<div class="test-code">${item.testCode}</div>` : ""}
+                  <div>${lab.name}</div>
+                  ${lab.testCode ? `<div class="test-code">${lab.testCode}</div>` : ""}
                 </td>
                 <td class="result-value${isAbnormal ? " result-abnormal" : ""}">
                   ${cleanedResult}${arrow}
                 </td>
-                <td class="unit">${item.unit || "—"}</td>
+                <td class="unit">${lab.unit || "—"}</td>
                 <td class="reference">${referenceDisplay}</td>
-                <td style="text-align: center;">${item.method || "—"}</td>
+                <td style="text-align: center;">${lab.method || "—"}</td>
               </tr>
               ${
-                item.conclusion
+                lab.conclusion
                   ? `
               <tr>
                 <td colspan="5" class="conclusion-section">
                   <div class="conclusion-title">Заключение:</div>
-                  <div class="conclusion-text">${item.conclusion}</div>
-                  ${item.executedBy ? `<div class="method-info">Исполнитель: ${item.executedBy}</div>` : ""}
+                  <div class="conclusion-text">${lab.conclusion}</div>
+                  ${lab.executedBy ? `<div class="method-info">Исполнитель: ${lab.executedBy}</div>` : ""}
                 </td>
               </tr>
               `
@@ -1330,21 +1313,62 @@ export default function PatientPage() {
       `;
     };
 
+    // Собираем весь контент страниц
     let pagesContent = "";
 
-    pages.forEach((pageTests, index) => {
-      pagesContent += `
+    // 1. Добавляем страницы с обычными анализами
+    if (pages.length > 0) {
+      pages.forEach((pageTests, pageIndex) => {
+        pagesContent += `
 <div class="page">
   ${createWatermark()}
   <div class="content">
     ${createHeader()}
-    ${index === 0 ? '<div class="results-title">РЕЗУЛЬТАТЫ ЛАБОРАТОРНЫХ ИССЛЕДОВАНИЙ</div>' : ""}
+    ${pageIndex === 0 ? '<div class="results-title">РЕЗУЛЬТАТЫ ЛАБОРАТОРНЫХ ИССЛЕДОВАНИЙ</div>' : ""}
     ${generateResultsTable(pageTests)}
     ${createFooter()}
   </div>
 </div>`;
-    });
+      });
+    }
 
+    // 2. Добавляем страницы с бланковыми анализами
+    if (blankResults && blankResults.length > 0) {
+      blankResults.forEach((blankAssignment) => {
+        const blankName =
+          blankAssignment.blank?.name || "Бланковое исследование";
+        const blankContent =
+          blankAssignment.filledContent ||
+          blankAssignment.blank?.content ||
+          "Содержимое не заполнено";
+
+        pagesContent += `
+<div class="page blank-page">
+  ${createWatermark()}
+  <div class="content">
+    ${createHeader()}
+    <div class="results-title">${blankName}</div>
+    <div class="blank-content">
+      ${blankContent}
+    </div>
+    ${
+      blankAssignment.conclusion
+        ? `
+    <div class="conclusion-section">
+      <div class="conclusion-title">Заключение врача-лаборанта:</div>
+      <div class="conclusion-text">${blankAssignment.conclusion}</div>
+      ${blankAssignment.executedBy ? `<div class="method-info">Исполнитель: ${blankAssignment.executedBy}</div>` : ""}
+    </div>
+    `
+        : ""
+    }
+    ${createFooter()}
+  </div>
+</div>`;
+      });
+    }
+
+    // Возвращаем полный HTML документ
     return `<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -1379,12 +1403,17 @@ export default function PatientPage() {
     page-break-after: always;
     page-break-inside: avoid;
     padding: 0;
-    display: flex;
-    flex-direction: column;
+    display: block;
   }
   
   .page:last-child {
     page-break-after: auto;
+  }
+  
+  /* КРИТИЧНО: Для бланковых страниц отключаем min-height */
+  .blank-page {
+    min-height: auto;
+    height: auto;
   }
   
   .watermark {
@@ -1406,9 +1435,6 @@ export default function PatientPage() {
     position: relative;
     z-index: 1;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    min-height: 100%;
   }
   
   .header {
@@ -1476,7 +1502,7 @@ export default function PatientPage() {
   
   .patient-info {
     margin: 10px 0;
-    font-size: 12px;
+    font-size: 11px;
     page-break-after: avoid;
   }
   
@@ -1491,23 +1517,22 @@ export default function PatientPage() {
     width: 140px;
     color: #666;
     font-weight: 500;
-    font-size: 12px;
+    font-size: 11px;
   }
   
   .info-value {
     flex: 1;
     color: #000;
-    font-size: 12px;
+    font-size: 11px;
   }
   
   .results-section {
     margin: 15px 0;
-    flex: 1;
   }
   
   .results-title {
     text-align: center;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
     margin-bottom: 12px;
     color: #2B7EC1;
@@ -1517,7 +1542,7 @@ export default function PatientPage() {
   }
 
   .department-title {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: bold;
     color: #2B7EC1;
     padding: 8px 12px !important;
@@ -1531,7 +1556,7 @@ export default function PatientPage() {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 10px;
-    font-size: 11px;
+    font-size: 9px;
     border: 1px solid #DDD;
     page-break-inside: auto;
   }
@@ -1545,46 +1570,41 @@ export default function PatientPage() {
     page-break-after: auto;
   }
   
-  /* КРИТИЧНО: Разрешаем разрывы для бланковых строк */
-  .results-table tr.blank-row-wrapper {
-    page-break-inside: auto !important;
-  }
-  
   .results-table th {
     background: #F8F9FA;
     border: 1px solid #CCC;
-    padding: 8px 6px;
+    padding: 6px 4px;
     text-align: center;
     font-weight: bold;
-    font-size: 11px;
+    font-size: 9px;
     color: #2B7EC1;
   }
   
   .results-table td {
     border: 1px solid #DDD;
-    padding: 7px 6px;
+    padding: 5px 4px;
     vertical-align: middle;
-    font-size: 11px;
+    font-size: 9px;
   }
   
   .test-name {
     font-weight: 500;
-    font-size: 11px;
+    font-size: 10px;
     padding-left: 8px !important;
   }
   
   .result-value {
     text-align: center;
     font-weight: bold;
-    font-size: 13px;
+    font-size: 11px;
     font-family: 'Courier New', monospace;
-    padding: 7px 5px !important;
+    padding: 5px 3px !important;
   }
 
   .arrow {
     display: inline-block;
     margin-left: 4px;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: bold;
   }
 
@@ -1598,16 +1618,16 @@ export default function PatientPage() {
   
   .unit {
     text-align: center;
-    font-size: 11px;
+    font-size: 9px;
     color: #666;
-    padding: 7px 5px !important;
+    padding: 5px 3px !important;
   }
   
   .reference {
-    font-size: 11px;
+    font-size: 9px;
     color: #444;
     text-align: center;
-    padding: 7px 5px !important;
+    padding: 5px 3px !important;
   }
   
   .abnormal {
@@ -1635,7 +1655,7 @@ export default function PatientPage() {
   .disclaimer {
     margin-top: 10px;
     text-align: center;
-    font-size: 10px;
+    font-size: 9px;
     color: #FF9800;
     font-style: italic;
     padding: 8px;
@@ -1649,20 +1669,20 @@ export default function PatientPage() {
     padding-top: 8px;
     border-top: 1px solid #DDD;
     text-align: center;
-    font-size: 9px;
+    font-size: 8px;
     color: #999;
     page-break-before: avoid;
   }
   
   .method-info {
-    font-size: 10px;
+    font-size: 9px;
     color: #666;
     font-style: italic;
-    margin-top: 3px;
+    margin-top: 2px;
   }
   
   .conclusion-section {
-    padding: 10px;
+    padding: 8px;
     background: #F5F9FF;
     border-left: 3px solid #2B7EC1;
     border-radius: 0 4px 4px 0;
@@ -1672,72 +1692,88 @@ export default function PatientPage() {
   
   .conclusion-title {
     font-weight: bold;
-    font-size: 12px;
+    font-size: 10px;
     margin-bottom: 5px;
     color: #2B7EC1;
   }
   
   .conclusion-text {
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: 10px;
+    line-height: 1.4;
     color: #333;
   }
 
-  /* Стили для бланковых анализов в таблице */
-  .blank-row {
-    padding: 12px !important;
-    background: #FAFAFA !important;
-    page-break-inside: auto !important;
-  }
-
-  .blank-name {
-    font-size: 14px;
-    font-weight: bold;
-    color: #2B7EC1;
-    margin-bottom: 8px;
-    page-break-after: avoid;
-  }
-
-  .blank-content-inline {
-    font-size: 12px;
-    line-height: 1.5;
-    margin-bottom: 8px;
+  .blank-content {
+    max-width: 100%;
+    width: 100%;
+    margin: 8px 0;
+    padding: 8px;
+    border-radius: 4px;
+    background: #FAFAFA;
+    font-size: 8px;
+    overflow: visible;
     page-break-inside: auto;
   }
 
-  .blank-content-inline table {
+  .blank-content table {
+    max-width: 100%;
     width: 100%;
     border-collapse: collapse;
-    margin: 8px 0;
-    font-size: 12px;
+    margin: 4px 0;
+    font-size: 8px;
+    table-layout: fixed;
     page-break-inside: auto;
   }
 
-  .blank-content-inline table th,
-  .blank-content-inline table td {
+  .blank-content table th,
+  .blank-content table td {
     border: 1px solid #000;
-    padding: 6px;
-    font-size: 12px;
-    line-height: 1.4;
-    page-break-inside: avoid;
+    padding: 2px 4px;
+    font-size: 8px;
+    line-height: 1.2;
+    vertical-align: middle;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
 
-  .blank-content-inline table th {
+  .blank-content table th {
     background: #F0F0F0;
     font-weight: bold;
     color: #2B7EC1;
   }
 
-  .blank-content-inline table tbody {
+  /* КРИТИЧНО: Разрешаем разрывы строк в бланковых таблицах */
+  .blank-content table tr {
+    page-break-inside: auto;
+    page-break-after: auto;
+  }
+  
+  .blank-content table thead {
+    display: table-header-group;
+  }
+  
+  .blank-content table tbody {
     page-break-inside: auto;
   }
 
-  .blank-content-inline table thead {
-    display: table-header-group;
+  .blank-content h1, .blank-content h2, .blank-content h3,
+  .blank-content h4, .blank-content h5, .blank-content h6 {
+    font-size: 11px;
+    margin: 4px 0;
+    page-break-after: avoid;
+  }
+
+  .blank-content p {
+    font-size: 8px;
+    margin: 4px 0;
+  }
+
+  .blank-content table tbody tr:nth-child(even) {
+    background-color: #F9F9F9;
   }
 
   .test-code {
-    font-size: 9px;
+    font-size: 8px;
     color: #666;
     font-family: 'Courier New', monospace;
     margin-top: 2px;
@@ -1758,6 +1794,13 @@ export default function PatientPage() {
 
     .page:last-child {
       page-break-after: auto;
+    }
+    
+    /* Для бланковых страниц разрешаем разрывы */
+    .blank-page {
+      page-break-inside: auto;
+      min-height: auto;
+      height: auto;
     }
     
     .watermark {
@@ -1784,31 +1827,29 @@ export default function PatientPage() {
       page-break-inside: avoid !important;
     }
 
-    /* КРИТИЧНО: Разрешаем разрывы для бланковых строк при печати */
-    .results-table tr.blank-row-wrapper {
+    .blank-content {
+      max-width: 100% !important;
+      width: 100% !important;
       page-break-inside: auto !important;
     }
 
-    .blank-row {
+    .blank-content table {
+      max-width: 100% !important;
+      width: 100% !important;
       page-break-inside: auto !important;
-    }
-
-    .blank-content-inline {
-      page-break-inside: auto !important;
-    }
-
-    .blank-content-inline table {
-      page-break-inside: auto !important;
-    }
-
-    .blank-content-inline table tbody {
-      page-break-inside: auto !important;
-    }
-
-    .blank-content-inline table tr {
-      page-break-inside: avoid !important;
     }
     
+    /* Разрешаем разрывы строк в бланковых таблицах при печати */
+    .blank-content table tr {
+      page-break-inside: auto !important;
+      page-break-after: auto !important;
+    }
+    
+    .blank-content table tbody {
+      page-break-inside: auto !important;
+    }
+    
+    /* Запрещаем разрывы для header и footer */
     .header,
     .patient-info,
     .results-title,

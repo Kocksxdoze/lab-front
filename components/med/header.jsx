@@ -171,36 +171,32 @@ function Header() {
     };
     fetchReports();
   }, [api]);
-
   const fetchClients = async () => {
     try {
-      const response = await fetch(`${api}/clients`);
-      const data = await response.json();
-      console.log(data);
+      // Запрашиваем только нужные поля для поиска, большой лимит
+      // ?lite=true — наш новый параметр, убирает include-связи
+      const response = await fetch(`${api}/clients?limit=500&lite=true`);
+      const result = await response.json();
 
       if (response.ok) {
-        setAllClients(data); // Сохраняем всех клиентов для поиска
-        setClientsCount(data.length);
-        console.log("Data: ", data);
-        toast({
-          title: "Количество клиентов обновлено!",
-          status: "success",
-          duration: "5000",
-          position: "bottom-right",
-        });
+        // Обрабатываем оба формата — старый массив и новый { data, total }
+        const data = Array.isArray(result) ? result : result.data || [];
+
+        setAllClients(data);
+        // Берём total из нового формата, иначе длину массива
+        setClientsCount(result.total ?? data.length);
       } else {
         toast({
           title: "Ошибка в получении клиентов.",
           status: "error",
-          duration: "5000",
+          duration: 5000,
           position: "bottom-right",
         });
       }
     } catch (error) {
-      console.log("error:", error);
+      console.error("error:", error);
     }
   };
-
   useEffect(() => {
     fetchClients();
   }, [api, toast]);

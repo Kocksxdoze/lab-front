@@ -1,16 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  Box,
-  Spinner,
-  Text,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  TableContainer,
-} from "@chakra-ui/react";
+import { Box, Spinner } from "@chakra-ui/react";
 import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -23,6 +12,7 @@ import {
   Legend,
   Filler,
 } from "chart.js";
+import { getApiBaseUrl } from "../../utils/api";
 
 ChartJS.register(
   CategoryScale,
@@ -32,51 +22,49 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
 );
-import { getApiBaseUrl } from "../../utils/api";
 
 function GraphOne() {
-  const [data, setData] = useState(null);
+  const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const api = getApiBaseUrl();
+
   useEffect(() => {
-    fetch(`${api}/cashbox`)
-      .then((response) => response.json())
-      .then((data) => {
-        setData(data);
+    // Берём только последние 30 записей для графика — не нужно грузить всё
+    fetch(`${api}/cashbox?page=1&limit=30`)
+      .then((res) => res.json())
+      .then((result) => {
+        // После наших изменений бэкенд возвращает { data, total, page }
+        const records = Array.isArray(result) ? result : result.data || [];
+        // Разворачиваем — бэкенд отдаёт DESC, для графика нужен хронологический порядок
+        setData([...records].reverse());
         setLoading(false);
       })
       .catch((error) => {
-        console.error("Error fetching data:", error);
+        console.error("Error fetching cashbox:", error);
         setLoading(false);
       });
   }, []);
 
-  if (loading) {
-    return <Spinner size="xl" />;
-  }
+  if (loading) return <Spinner size="xl" />;
 
   const formatDate = (isoString) => {
-    const date = new Date(isoString);
-    return date.toLocaleDateString("en-GB", {
+    if (!isoString) return "";
+    return new Date(isoString).toLocaleDateString("ru-RU", {
       day: "2-digit",
       month: "short",
-      year: "numeric",
     });
   };
 
   const gradientFill = (context, color) => {
-    const chart = context.chart;
-    const { ctx, chartArea } = chart;
-    if (!chartArea) {
-      return null;
-    }
+    const { ctx, chartArea } = context.chart;
+    if (!chartArea) return null;
     const gradient = ctx.createLinearGradient(
       0,
       chartArea.top,
       0,
-      chartArea.bottom
+      chartArea.bottom,
     );
     gradient.addColorStop(0, color);
     gradient.addColorStop(0.5, "rgba(0, 50, 150, 0.3)");
@@ -85,14 +73,15 @@ function GraphOne() {
   };
 
   const chartData = {
-    labels: data.map((item) => formatDate(item.date)),
+    // Используем createdAt — поле которое реально существует в Cashbox
+    labels: data.map((item) => formatDate(item.createdAt || item.date)),
     datasets: [
       {
-        label: "Прибыль",
-        data: data.map((item) => item.sum),
+        label: "Оплачено",
+        // paidAmount — реальное поле из модели Cashbox
+        data: data.map((item) => item.paidAmount || item.sum || 0),
         borderColor: "#0033AA",
-        backgroundColor: (context) =>
-          gradientFill(context, "rgba(0, 50, 150, 0.9)"),
+        backgroundColor: (ctx) => gradientFill(ctx, "rgba(0, 50, 150, 0.9)"),
         borderWidth: 4,
         pointRadius: 8,
         pointBackgroundColor: "#00A3FF",
@@ -102,11 +91,10 @@ function GraphOne() {
         fill: true,
       },
       {
-        label: "Долги",
-        data: data.map((item) => item.debt ?? 0),
+        label: "Долг",
+        data: data.map((item) => item.debtAmount || item.debt || 0),
         borderColor: "#FF0000",
-        backgroundColor: (context) =>
-          gradientFill(context, "rgba(255, 0, 0, 0.6)"),
+        backgroundColor: (ctx) => gradientFill(ctx, "rgba(255, 0, 0, 0.6)"),
         borderWidth: 3,
         pointRadius: 6,
         pointBackgroundColor: "#FF4C4C",
@@ -127,24 +115,32 @@ function GraphOne() {
       },
       title: {
         display: true,
-        text: "Статистика кассы",
+        text: "Статистика кассы (последние 30 операций)",
         color: "#333",
         font: { size: 22, weight: "bold" },
       },
       tooltip: {
-        backgroundColor: "rgba(255, 255, 255, 0.9)",
+        backgroundColor: "rgba(255,255,255,0.9)",
         titleColor: "#000",
         bodyColor: "#000",
+        callbacks: {
+          label: (ctx) =>
+            `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()} сум`,
+        },
       },
     },
     scales: {
       x: {
-        grid: { color: "rgba(0, 0, 0, 0.1)" },
-        ticks: { color: "#555", font: { size: 14, weight: "bold" } },
+        grid: { color: "rgba(0,0,0,0.1)" },
+        ticks: { color: "#555", font: { size: 12 } },
       },
       y: {
-        grid: { color: "rgba(0, 0, 0, 0.1)" },
-        ticks: { color: "#555", font: { size: 14, weight: "bold" } },
+        grid: { color: "rgba(0,0,0,0.1)" },
+        ticks: {
+          color: "#555",
+          font: { size: 12 },
+          callback: (val) => val.toLocaleString(),
+        },
       },
     },
   };
@@ -152,58 +148,6 @@ function GraphOne() {
   return (
     <Box p={8} boxShadow="xl" borderRadius="xl" bg="white">
       <Line data={chartData} options={options} />
-      <TableContainer mt={6}>
-        <Table
-          variant="striped"
-          colorScheme="blue"
-          boxShadow="lg"
-          borderRadius="xl"
-        >
-          <Thead bg="blue.500">
-            <Tr>
-              <Th color="white" fontSize="lg">
-                Дата
-              </Th>
-              <Th color="#fff" fontSize="lg">
-                Сумма
-              </Th>
-              <Th color="white" fontSize="lg">
-                Долг
-              </Th>
-            </Tr>
-          </Thead>
-          <Tbody>
-            {data.map((item, index) => (
-              <Tr key={index} _hover={{ bg: "blue.100" }}>
-                <Td
-                  fontSize="md"
-                  fontWeight="bold"
-                  color="black"
-                  borderBottom="2px solid #0033AA"
-                >
-                  {formatDate(item.date)}
-                </Td>
-                <Td
-                  fontSize="md"
-                  fontWeight="bold"
-                  color="#000"
-                  borderBottom="2px solid #0033AA"
-                >
-                  {item.sum.toLocaleString()}
-                </Td>
-                <Td
-                  fontSize="md"
-                  fontWeight="bold"
-                  color="red.600"
-                  borderBottom="2px solid #AA0000"
-                >
-                  {(item.debt ?? 0).toLocaleString()}
-                </Td>
-              </Tr>
-            ))}
-          </Tbody>
-        </Table>
-      </TableContainer>
     </Box>
   );
 }

@@ -32,6 +32,9 @@ function Patients() {
   const [labStats, setLabStats] = useState({});
   const router = useRouter();
   const api = getApiBaseUrl();
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const PAGE_SIZE = 50;
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -45,16 +48,26 @@ function Patients() {
     loadPatients();
   }, []);
 
-  const loadPatients = async () => {
+  const loadPatients = async (pageNum = 1, searchValue = "") => {
     setLoading(true);
     try {
-      const response = await fetch(`${api}/clients`);
-      if (!response.ok) throw new Error("Ошибка загрузки пациентов");
+      const params = new URLSearchParams({
+        page: pageNum,
+        limit: PAGE_SIZE,
+        ...(searchValue && { search: searchValue }),
+      });
 
-      const data = await response.json();
-      setPatients(Array.isArray(data) ? data : []);
+      const response = await fetch(`${api}/clients?${params}`);
+      if (!response.ok) throw new Error();
 
-      // Загружаем статистику анализов для каждого пациента
+      const { data, total: totalCount } = await response.json();
+
+      setPatients(pageNum === 1 ? data : (prev) => [...prev, ...data]);
+      setTotal(totalCount);
+      setPage(pageNum);
+
+      // Статистику анализов загружаем ТОЛЬКО для видимых пациентов
+      // и только один суммарный запрос, не N запросов
       await loadLabStats(data);
     } catch (error) {
       console.error("Ошибка загрузки пациентов:", error);
@@ -62,6 +75,22 @@ function Patients() {
       setLoading(false);
     }
   };
+
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearch(value);
+
+    // Debounce — не шлём запрос на каждую букву
+    clearTimeout(window._searchTimer);
+    window._searchTimer = setTimeout(() => {
+      loadPatients(1, value);
+    }, 400);
+  };
+
+  // useEffect обновляем
+  useEffect(() => {
+    loadPatients(1, search);
+  }, []); // loadLabStats вызывается внутри loadPatients
 
   const loadLabStats = async (patientsList) => {
     try {
@@ -83,10 +112,10 @@ function Patients() {
           } catch (err) {
             console.error(
               `Ошибка загрузки анализов для пациента ${patient.id}:`,
-              err
+              err,
             );
           }
-        })
+        }),
       );
       setLabStats(stats);
     } catch (error) {
@@ -105,7 +134,7 @@ function Patients() {
         `${patient?.surname} ${patient?.name} ${patient?.lastName}`,
         patient?.phoneNumber,
       ].some((field) =>
-        field?.toString().toLowerCase().includes(search.toLowerCase())
+        field?.toString().toLowerCase().includes(search.toLowerCase()),
       );
 
       // Фильтр по долгу
@@ -128,16 +157,6 @@ function Patients() {
         return new Date(b.createdAt) - new Date(a.createdAt);
       return 0;
     });
-
-  const handleSearchChange = (e) => {
-    const value = e.target.value;
-    setSearch(value);
-    if (value.trim()) {
-      router.push(`/patients?search=${encodeURIComponent(value.trim())}`);
-    } else {
-      router.push("/patients");
-    }
-  };
 
   const calculateAge = (dateString) => {
     if (!dateString) return "";
@@ -308,7 +327,18 @@ function Patients() {
           </Table>
         </TableContainer>
       )}
-
+      {patients.length < total && (
+        <Flex justify="center" mt={4}>
+          <Button
+            onClick={() => loadPatients(page + 1, search)}
+            isLoading={loading}
+            colorScheme="blue"
+            variant="outline"
+          >
+            Загрузить ещё ({total - patients.length} из {total})
+          </Button>
+        </Flex>
+      )}
       {filteredPatients.length === 0 && !loading && (
         <Box textAlign="center" py={8}>
           <Text color="gray.500">Пациенты не найдены</Text>

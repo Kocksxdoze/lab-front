@@ -1,16 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  Box,
-  Spinner,
-  Text,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  TableContainer,
-} from "@chakra-ui/react";
+import { Box, Spinner } from "@chakra-ui/react";
 import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -23,6 +12,7 @@ import {
   Legend,
   Filler,
 } from "chart.js";
+import { getApiBaseUrl } from "../../utils/api";
 
 ChartJS.register(
   CategoryScale,
@@ -32,56 +22,57 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
 );
-import fetchClients from "../../utils/fetchClients";
 
 function GraphTwo() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const api = getApiBaseUrl();
 
   useEffect(() => {
-    fetchClients()
-      .then((data) => {
-        const lastMonthClients = data.filter((client) => {
-          const clientDate = new Date(client.createdAt);
-          const oneMonthAgo = new Date();
-          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-          return clientDate >= oneMonthAgo;
-        });
+    // Берём последние 60 записей — достаточно для графика за месяц
+    fetch(`${api}/clients?page=1&limit=60`)
+      .then((res) => res.json())
+      .then((result) => {
+        // После наших изменений бэкенд возвращает { data, total, page }
+        const all = Array.isArray(result) ? result : result.data || [];
 
-        setClients(lastMonthClients);
+        // Фильтруем за последний месяц прямо на фронте (данных уже мало)
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+        const recent = all
+          .filter((c) => new Date(c.createdAt) >= oneMonthAgo)
+          .reverse(); // хронологический порядок для графика
+
+        setClients(recent);
         setLoading(false);
       })
       .catch((error) => {
-        console.error("Error fetching data:", error);
+        console.error("Error fetching clients:", error);
         setLoading(false);
       });
   }, []);
 
-  if (loading) {
-    return <Spinner size="xl" />;
-  }
+  if (loading) return <Spinner size="xl" />;
 
   const formatDate = (isoString) => {
-    const date = new Date(isoString);
-    return date.toLocaleDateString("en-GB", {
+    if (!isoString) return "";
+    return new Date(isoString).toLocaleDateString("ru-RU", {
       day: "2-digit",
       month: "short",
-      year: "numeric",
     });
   };
+
   const gradientFill = (context, color) => {
-    const chart = context.chart;
-    const { ctx, chartArea } = chart;
-    if (!chartArea) {
-      return null;
-    }
+    const { ctx, chartArea } = context.chart;
+    if (!chartArea) return null;
     const gradient = ctx.createLinearGradient(
       0,
       chartArea.top,
       0,
-      chartArea.bottom
+      chartArea.bottom,
     );
     gradient.addColorStop(0, color);
     gradient.addColorStop(0.5, "rgba(0, 50, 150, 0.3)");
@@ -89,15 +80,21 @@ function GraphTwo() {
     return gradient;
   };
 
+  // Группируем по датам — один столбец на день, а не на каждого клиента
+  const groupedByDate = clients.reduce((acc, client) => {
+    const date = formatDate(client.createdAt);
+    acc[date] = (acc[date] || 0) + 1;
+    return acc;
+  }, {});
+
   const chartData = {
-    labels: clients.map((client) => formatDate(client.createdAt)),
+    labels: Object.keys(groupedByDate),
     datasets: [
       {
-        label: "Новые клиенты",
-        data: clients.map(() => 1),
+        label: "Новые пациенты",
+        data: Object.values(groupedByDate),
         borderColor: "#0033AA",
-        backgroundColor: (context) =>
-          gradientFill(context, "rgba(0, 50, 150, 0.9)"),
+        backgroundColor: (ctx) => gradientFill(ctx, "rgba(0, 50, 150, 0.9)"),
         borderWidth: 4,
         pointRadius: 8,
         pointBackgroundColor: "#00A3FF",
@@ -118,24 +115,27 @@ function GraphTwo() {
       },
       title: {
         display: true,
-        text: "Последние клиенты за месяц",
+        text: "Новые пациенты за последний месяц",
         color: "#333",
         font: { size: 22, weight: "bold" },
       },
       tooltip: {
-        backgroundColor: "rgba(255, 255, 255, 0.9)",
+        backgroundColor: "rgba(255,255,255,0.9)",
         titleColor: "#000",
         bodyColor: "#000",
+        callbacks: {
+          label: (ctx) => `Пациентов: ${ctx.parsed.y}`,
+        },
       },
     },
     scales: {
       x: {
-        grid: { color: "rgba(0, 0, 0, 0.1)" },
-        ticks: { color: "#555", font: { size: 14, weight: "bold" } },
+        grid: { color: "rgba(0,0,0,0.1)" },
+        ticks: { color: "#555", font: { size: 12 } },
       },
       y: {
-        grid: { color: "rgba(0, 0, 0, 0.1)" },
-        ticks: { color: "#555", font: { size: 14, weight: "bold" } },
+        grid: { color: "rgba(0,0,0,0.1)" },
+        ticks: { color: "#555", font: { size: 12 }, stepSize: 1 },
       },
     },
   };
@@ -143,58 +143,6 @@ function GraphTwo() {
   return (
     <Box p={8} boxShadow="xl" borderRadius="xl" bg="white">
       <Line data={chartData} options={options} />
-      <TableContainer mt={6}>
-        <Table
-          variant="striped"
-          colorScheme="blue"
-          boxShadow="lg"
-          borderRadius="xl"
-        >
-          <Thead bg="blue.500">
-            <Tr>
-              <Th color="white" fontSize="lg">
-                Дата регистрации
-              </Th>
-              <Th color="white" fontSize="lg">
-                Имя
-              </Th>
-              <Th color="white" fontSize="lg">
-                Телефон
-              </Th>
-            </Tr>
-          </Thead>
-          <Tbody>
-            {clients.map((client, index) => (
-              <Tr key={index} _hover={{ bg: "blue.100" }}>
-                <Td
-                  fontSize="md"
-                  fontWeight="bold"
-                  color="black"
-                  borderBottom="2px solid #0033AA"
-                >
-                  {formatDate(client.createdAt)}
-                </Td>
-                <Td
-                  fontSize="md"
-                  fontWeight="bold"
-                  color="#000"
-                  borderBottom="2px solid #0033AA"
-                >
-                  {client.surname} {client.name} {client.lastName}
-                </Td>
-                <Td
-                  fontSize="md"
-                  fontWeight="bold"
-                  color="#000"
-                  borderBottom="2px solid #AA0000"
-                >
-                  {client.phoneNumber}
-                </Td>
-              </Tr>
-            ))}
-          </Tbody>
-        </Table>
-      </TableContainer>
     </Box>
   );
 }
