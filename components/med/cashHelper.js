@@ -1,8 +1,6 @@
 // utils/cashHelper.js
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://punk-regulation-introduced-tourism.trycloudflare.com";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 // Явно экспортируемые функции
 export const fetchCashRecords = async () => {

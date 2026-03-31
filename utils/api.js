@@ -5,5 +5,5 @@ export function getApiBaseUrl() {
     return `http://${host}:4000`;
   }
 
-  return "https://punk-regulation-introduced-tourism.trycloudflare.com";
+  return "http://localhost:4000";
 }

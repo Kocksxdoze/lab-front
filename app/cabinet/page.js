@@ -933,381 +933,476 @@ function Cabinet() {
             overflow="hidden"
           >
             <CardBody p={0}>
-              <Grid
-                templateColumns={{ base: "1fr", lg: "300px 1fr" }}
-                gap={0}
-                overflow="hidden"
-              >
-                {/* Боковая панель профиля */}
-                <Box
-                  bg="blue.50"
-                  p={{ base: 3, md: 4, lg: 6 }}
-                  borderRight="1px solid"
-                  borderColor="blue.100"
-                >
-                  <VStack spacing={6} align="center">
-                    <Avatar
-                      size="2xl"
-                      name={`${user.name} ${user.surname}`}
-                      bg="blue.500"
-                      color="white"
-                      src={user.userAvatar}
-                    />
-                    <VStack spacing={2} textAlign="center">
-                      <Text fontSize="2xl" fontWeight="bold">
-                        {user.name} {user.surname}
-                      </Text>
-                      <Tag colorScheme="blue" size="lg">
-                        <TagLeftIcon as={StarIcon} />
-                        <TagLabel>
-                          {user.profession || "Врач-лаборант"}
-                        </TagLabel>
-                      </Tag>
-                      <Text fontSize="sm" color="gray.600">
-                        ID: {user.id}
-                      </Text>
-                    </VStack>
-
-                    <Divider />
-
-                    <VStack spacing={4} w="100%" align="stretch">
-                      <HStack spacing={3}>
-                        <PhoneIcon color="blue.500" />
-                        <Text>{user.phoneNumber || "Не указан"}</Text>
-                      </HStack>
-                      <HStack spacing={3}>
-                        <EmailIcon color="blue.500" />
-                        <Text fontSize="sm">{user.email || "Не указан"}</Text>
-                      </HStack>
-                    </VStack>
-
-                    <Divider />
-
-                    <Button
-                      leftIcon={<SettingsIcon />}
-                      colorScheme="blue"
-                      variant="outline"
-                      w="100%"
-                      onClick={() => setActiveTab("profile")}
-                    >
-                      Настройки профиля
-                    </Button>
+              {/* Основной контент */}
+              <Box p={6}>
+                <Flex justify="space-between" align="center" mb={6} w={"100%"}>
+                  <VStack align="start" spacing={1} w={"100%"}>
+                    <Text fontSize="3xl" fontWeight="bold" color="blue.700">
+                      Лабораторный кабинет
+                    </Text>
+                    <Text color="gray.600">
+                      Добро пожаловать в рабочую область
+                    </Text>
                   </VStack>
-                </Box>
 
-                {/* Основной контент */}
-                <Box p={6}>
-                  <Flex
-                    justify="space-between"
-                    align="center"
-                    mb={6}
-                    w={"100%"}
-                  >
-                    <VStack align="start" spacing={1} w={"100%"}>
-                      <Text fontSize="3xl" fontWeight="bold" color="blue.700">
-                        Лабораторный кабинет
-                      </Text>
-                      <Text color="gray.600">
-                        Добро пожаловать в рабочую область
-                      </Text>
-                    </VStack>
+                  <HStack spacing={4}>
+                    <Tooltip label="Обновить данные">
+                      <IconButton
+                        icon={<RepeatIcon />}
+                        onClick={() => {
+                          loadLabTests();
+                          loadBlankAssignments();
+                          toast({
+                            title: "Данные обновлены",
+                            status: "info",
+                            duration: 2000,
+                          });
+                        }}
+                        isLoading={loading || loadingBlanks}
+                      />
+                    </Tooltip>
+                  </HStack>
+                </Flex>
 
-                    <HStack spacing={4}>
-                      <Tooltip label="Обновить данные">
-                        <IconButton
-                          icon={<RepeatIcon />}
-                          onClick={() => {
-                            loadLabTests();
-                            loadBlankAssignments();
-                            toast({
-                              title: "Данные обновлены",
-                              status: "info",
-                              duration: 2000,
-                            });
-                          }}
-                          isLoading={loading || loadingBlanks}
-                        />
-                      </Tooltip>
-                    </HStack>
-                  </Flex>
-
-                  {/* Фильтры и поиск */}
-                  <Card mb={6} shadow="sm">
-                    <CardBody>
-                      <Grid
-                        templateColumns={{ base: "1fr", md: "1fr auto" }}
-                        gap={4}
-                      >
-                        <HStack>
-                          <Input
-                            placeholder="Поиск по пациентам, тестам или кодам..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            size="lg"
-                          />
-                          <IconButton
-                            icon={<SearchIcon />}
-                            colorScheme="blue"
-                            aria-label="Поиск"
-                          />
-                        </HStack>
-                        <Select
-                          value={statusFilter}
-                          onChange={(e) => setStatusFilter(e.target.value)}
+                {/* Фильтры и поиск */}
+                <Card mb={6} shadow="sm">
+                  <CardBody>
+                    <Grid
+                      templateColumns={{ base: "1fr", md: "1fr auto" }}
+                      gap={4}
+                    >
+                      <HStack>
+                        <Input
+                          placeholder="Поиск по пациентам, тестам или кодам..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
                           size="lg"
-                          w={{ base: "100%", md: "200px" }}
-                        >
-                          <option value="all">Все статусы</option>
-                          <option value="pending">В работе</option>
-                          <option value="completed">Завершено</option>
-                          <option value="abnormal">С отклонениями</option>
-                        </Select>
-                      </Grid>
+                        />
+                        <IconButton
+                          icon={<SearchIcon />}
+                          colorScheme="blue"
+                          aria-label="Поиск"
+                        />
+                      </HStack>
+                      <Select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        size="lg"
+                        w={{ base: "100%", md: "200px" }}
+                      >
+                        <option value="all">Все статусы</option>
+                        <option value="pending">В работе</option>
+                        <option value="completed">Завершено</option>
+                        <option value="abnormal">С отклонениями</option>
+                      </Select>
+                    </Grid>
+                  </CardBody>
+                </Card>
+
+                {/* Быстрая статистика */}
+                <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4} mb={6}>
+                  <Card
+                    bg="yellow.50"
+                    borderLeft="4px"
+                    borderColor="yellow.400"
+                    _hover={{ transform: "translateY(-2px)", shadow: "md" }}
+                    transition="all 0.2s"
+                  >
+                    <CardBody>
+                      <Stat>
+                        <StatLabel color="gray.600">Обычные анализы</StatLabel>
+                        <StatNumber color="yellow.600">
+                          {stats.pendingTests}
+                        </StatNumber>
+                        <StatHelpText>
+                          <WarningIcon mr={1} />В работе
+                        </StatHelpText>
+                      </Stat>
                     </CardBody>
                   </Card>
 
-                  {/* Быстрая статистика */}
-                  <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4} mb={6}>
-                    <Card
-                      bg="yellow.50"
-                      borderLeft="4px"
-                      borderColor="yellow.400"
-                      _hover={{ transform: "translateY(-2px)", shadow: "md" }}
-                      transition="all 0.2s"
-                    >
-                      <CardBody>
-                        <Stat>
-                          <StatLabel color="gray.600">
-                            Обычные анализы
-                          </StatLabel>
-                          <StatNumber color="yellow.600">
-                            {stats.pendingTests}
-                          </StatNumber>
-                          <StatHelpText>
-                            <WarningIcon mr={1} />В работе
-                          </StatHelpText>
-                        </Stat>
-                      </CardBody>
-                    </Card>
-
-                    <Card
-                      bg="purple.50"
-                      borderLeft="4px"
-                      borderColor="purple.400"
-                      _hover={{ transform: "translateY(-2px)", shadow: "md" }}
-                      transition="all 0.2s"
-                    >
-                      <CardBody>
-                        <Stat>
-                          <StatLabel color="gray.600">
-                            Табличные бланки
-                          </StatLabel>
-                          <StatNumber color="purple.600">
-                            {stats.pendingBlanks}
-                          </StatNumber>
-                          <StatHelpText>
-                            <TimeIcon mr={1} />
-                            Ожидают заполнения
-                          </StatHelpText>
-                        </Stat>
-                      </CardBody>
-                    </Card>
-
-                    <Card
-                      bg="green.50"
-                      borderLeft="4px"
-                      borderColor="green.400"
-                      _hover={{ transform: "translateY(-2px)", shadow: "md" }}
-                      transition="all 0.2s"
-                    >
-                      <CardBody>
-                        <Stat>
-                          <StatLabel color="gray.600">Завершено</StatLabel>
-                          <StatNumber color="green.600">
-                            {stats.completedTests + stats.completedBlanks}
-                          </StatNumber>
-                          <StatHelpText>
-                            <CheckCircleIcon mr={1} />
-                            Готовы к выдаче
-                          </StatHelpText>
-                        </Stat>
-                      </CardBody>
-                    </Card>
-
-                    <Card
-                      bg="red.50"
-                      borderLeft="4px"
-                      borderColor="red.400"
-                      _hover={{ transform: "translateY(-2px)", shadow: "md" }}
-                      transition="all 0.2s"
-                    >
-                      <CardBody>
-                        <Stat>
-                          <StatLabel color="gray.600">Отклонения</StatLabel>
-                          <StatNumber color="red.600">
-                            {stats.abnormalTests}
-                          </StatNumber>
-                          <StatHelpText>
-                            <WarningIcon mr={1} />
-                            Требуют внимания
-                          </StatHelpText>
-                        </Stat>
-                      </CardBody>
-                    </Card>
-                  </SimpleGrid>
-
-                  {/* Основные вкладки */}
-                  <Tabs
-                    variant="enclosed"
-                    colorScheme="blue"
-                    index={
-                      activeTab === "labs" ? 0 : activeTab === "blanks" ? 1 : 2
-                    }
+                  <Card
+                    bg="purple.50"
+                    borderLeft="4px"
+                    borderColor="purple.400"
+                    _hover={{ transform: "translateY(-2px)", shadow: "md" }}
+                    transition="all 0.2s"
                   >
-                    <TabList mb={6}>
-                      <Tab onClick={() => setActiveTab("labs")}>
-                        <HStack>
-                          <TimeIcon />
-                          <Text>Обычные анализы</Text>
-                          {stats.pendingTests > 0 && (
-                            <Badge colorScheme="yellow">
-                              {stats.pendingTests}
-                            </Badge>
-                          )}
-                        </HStack>
-                      </Tab>
-                      <Tab onClick={() => setActiveTab("blanks")}>
-                        <HStack>
-                          <CalendarIcon />
-                          <Text>Табличные бланки</Text>
-                          {stats.pendingBlanks > 0 && (
-                            <Badge colorScheme="purple">
-                              {stats.pendingBlanks}
-                            </Badge>
-                          )}
-                        </HStack>
-                      </Tab>
-                      <Tab onClick={() => setActiveTab("profile")}>
-                        <HStack>
-                          <SettingsIcon />
-                          <Text>Профиль и статистика</Text>
-                        </HStack>
-                      </Tab>
-                    </TabList>
+                    <CardBody>
+                      <Stat>
+                        <StatLabel color="gray.600">Табличные бланки</StatLabel>
+                        <StatNumber color="purple.600">
+                          {stats.pendingBlanks}
+                        </StatNumber>
+                        <StatHelpText>
+                          <TimeIcon mr={1} />
+                          Ожидают заполнения
+                        </StatHelpText>
+                      </Stat>
+                    </CardBody>
+                  </Card>
 
-                    <TabPanels>
-                      {/* Вкладка обычных анализов */}
-                      <TabPanel p={0}>
-                        <Card shadow="xs">
-                          <CardHeader>
-                            <Flex justify="space-between" align="center">
-                              <Text fontSize="xl" fontWeight="bold">
-                                Список анализов ({filteredLabTests.length})
-                              </Text>
-                              <Badge colorScheme="blue">
-                                Всего: {stats.totalTests}
-                              </Badge>
+                  <Card
+                    bg="green.50"
+                    borderLeft="4px"
+                    borderColor="green.400"
+                    _hover={{ transform: "translateY(-2px)", shadow: "md" }}
+                    transition="all 0.2s"
+                  >
+                    <CardBody>
+                      <Stat>
+                        <StatLabel color="gray.600">Завершено</StatLabel>
+                        <StatNumber color="green.600">
+                          {stats.completedTests + stats.completedBlanks}
+                        </StatNumber>
+                        <StatHelpText>
+                          <CheckCircleIcon mr={1} />
+                          Готовы к выдаче
+                        </StatHelpText>
+                      </Stat>
+                    </CardBody>
+                  </Card>
+
+                  <Card
+                    bg="red.50"
+                    borderLeft="4px"
+                    borderColor="red.400"
+                    _hover={{ transform: "translateY(-2px)", shadow: "md" }}
+                    transition="all 0.2s"
+                  >
+                    <CardBody>
+                      <Stat>
+                        <StatLabel color="gray.600">Отклонения</StatLabel>
+                        <StatNumber color="red.600">
+                          {stats.abnormalTests}
+                        </StatNumber>
+                        <StatHelpText>
+                          <WarningIcon mr={1} />
+                          Требуют внимания
+                        </StatHelpText>
+                      </Stat>
+                    </CardBody>
+                  </Card>
+                </SimpleGrid>
+
+                {/* Основные вкладки */}
+                <Tabs
+                  variant="enclosed"
+                  colorScheme="blue"
+                  index={
+                    activeTab === "labs" ? 0 : activeTab === "blanks" ? 1 : 2
+                  }
+                >
+                  <TabList mb={6}>
+                    <Tab onClick={() => setActiveTab("labs")}>
+                      <HStack>
+                        <TimeIcon />
+                        <Text>Обычные анализы</Text>
+                        {stats.pendingTests > 0 && (
+                          <Badge colorScheme="yellow">
+                            {stats.pendingTests}
+                          </Badge>
+                        )}
+                      </HStack>
+                    </Tab>
+                    <Tab onClick={() => setActiveTab("blanks")}>
+                      <HStack>
+                        <CalendarIcon />
+                        <Text>Табличные бланки</Text>
+                        {stats.pendingBlanks > 0 && (
+                          <Badge colorScheme="purple">
+                            {stats.pendingBlanks}
+                          </Badge>
+                        )}
+                      </HStack>
+                    </Tab>
+                    <Tab onClick={() => setActiveTab("profile")}>
+                      <HStack>
+                        <SettingsIcon />
+                        <Text>Профиль и статистика</Text>
+                      </HStack>
+                    </Tab>
+                  </TabList>
+
+                  <TabPanels>
+                    {/* Вкладка обычных анализов */}
+                    <TabPanel p={0}>
+                      <Card shadow="xs">
+                        <CardHeader>
+                          <Flex justify="space-between" align="center">
+                            <Text fontSize="xl" fontWeight="bold">
+                              Список анализов ({filteredLabTests.length})
+                            </Text>
+                            <Badge colorScheme="blue">
+                              Всего: {stats.totalTests}
+                            </Badge>
+                          </Flex>
+                        </CardHeader>
+                        <CardBody p={0}>
+                          {loading ? (
+                            <Flex justify="center" py={20}>
+                              <Spinner size="xl" color="blue.500" />
                             </Flex>
-                          </CardHeader>
-                          <CardBody p={0}>
-                            {loading ? (
-                              <Flex justify="center" py={20}>
-                                <Spinner size="xl" color="blue.500" />
-                              </Flex>
-                            ) : filteredLabTests.length > 0 ? (
-                              <Box
-                                overflowX="scroll" // Добавлен горизонтальный скролл
-                                overflowY="auto" // Вертикальный скролл
-                                maxH="600px" // Ограничение высоты
-                                width="100%"
-                              >
-                                <Table
-                                  variant="simple"
-                                  width={"100%"}
-                                  size="xs"
-                                >
-                                  <Thead bg="blue.50" position="sticky">
-                                    <Tr>
-                                      <Th>ID</Th>
-                                      <Th>Пациент</Th>
-                                      <Th>Анализ</Th>
-                                      <Th>Результат</Th>
-                                      <Th>Норма</Th>
-                                      <Th>Статус</Th>
-                                      <Th>Действия</Th>
-                                      <Th>Дата</Th>
+                          ) : filteredLabTests.length > 0 ? (
+                            <Box
+                              overflowX="scroll" // Добавлен горизонтальный скролл
+                              overflowY="auto" // Вертикальный скролл
+                              maxH="600px" // Ограничение высоты
+                              width="100%"
+                            >
+                              <Table variant="simple" width={"100%"} size="xs">
+                                <Thead bg="blue.50" position="sticky">
+                                  <Tr>
+                                    <Th>ID</Th>
+                                    <Th>Пациент</Th>
+                                    <Th>Анализ</Th>
+                                    <Th>Результат</Th>
+                                    <Th>Норма</Th>
+                                    <Th>Статус</Th>
+                                    <Th>Действия</Th>
+                                    <Th>Дата</Th>
+                                  </Tr>
+                                </Thead>
+                                <Tbody>
+                                  {filteredLabTests.map((test) => (
+                                    <Tr
+                                      key={test.id}
+                                      _hover={{ bg: "gray.50" }}
+                                      bg={
+                                        test.isAbnormal ? "red.50" : "inherit"
+                                      }
+                                    >
+                                      <Td fontWeight="bold">{test.id}</Td>
+                                      <Td>
+                                        <VStack align="start" spacing={0}>
+                                          <Text fontWeight="medium">
+                                            {test.client?.surname}{" "}
+                                            {test.client?.name}
+                                          </Text>
+                                          <Text fontSize="xs" color="gray.600">
+                                            {test.client?.phoneNumber}
+                                          </Text>
+                                        </VStack>
+                                      </Td>
+                                      <Td>
+                                        <VStack align="start" spacing={1}>
+                                          <Badge colorScheme="blue">
+                                            {test.testCode}
+                                          </Badge>
+                                          <Text
+                                            fontSize="xs"
+                                            fontWeight="medium"
+                                          >
+                                            {test.name}
+                                          </Text>
+                                        </VStack>
+                                      </Td>
+
+                                      <Td>
+                                        {test.result ? (
+                                          <Text
+                                            fontWeight="bold"
+                                            color={
+                                              test.isAbnormal
+                                                ? "red.600"
+                                                : "green.600"
+                                            }
+                                          >
+                                            {test.result} {test.unit}
+                                          </Text>
+                                        ) : (
+                                          <Text color="gray.400">—</Text>
+                                        )}
+                                      </Td>
+                                      <Td fontSize="xs">
+                                        <Tooltip
+                                          label="Из категории"
+                                          placement="top"
+                                        >
+                                          <Text>
+                                            {test.referenceText ||
+                                              (test.referenceMin &&
+                                              test.referenceMax
+                                                ? `${test.referenceMin}-${test.referenceMax} ${test.unit}`
+                                                : "—")}
+                                          </Text>
+                                        </Tooltip>
+                                      </Td>
+                                      <Td>
+                                        {test.ready ? (
+                                          <Badge
+                                            colorScheme="green"
+                                            px={2}
+                                            py={1}
+                                          >
+                                            Готово
+                                          </Badge>
+                                        ) : (
+                                          <Badge
+                                            colorScheme="yellow"
+                                            px={2}
+                                            py={1}
+                                          >
+                                            В работе
+                                          </Badge>
+                                        )}
+                                      </Td>
+
+                                      <Td>
+                                        <HStack spacing={2}>
+                                          <Button
+                                            size="xs"
+                                            colorScheme="blue"
+                                            onClick={() => handleOpenTest(test)}
+                                            leftIcon={
+                                              test.ready ? (
+                                                <ViewIcon />
+                                              ) : (
+                                                <EditIcon />
+                                              )
+                                            }
+                                          >
+                                            {test.ready
+                                              ? "Просмотр"
+                                              : "Заполнить"}
+                                          </Button>
+                                        </HStack>
+                                      </Td>
+                                      <Td fontSize="xs">
+                                        {new Date(
+                                          test.createdAt,
+                                        ).toLocaleDateString("ru-RU")}
+                                      </Td>
                                     </Tr>
-                                  </Thead>
-                                  <Tbody>
-                                    {filteredLabTests.map((test) => (
+                                  ))}
+                                </Tbody>
+                              </Table>
+                            </Box>
+                          ) : (
+                            <Box textAlign="center" py={20}>
+                              <Text color="gray.500" fontSize="lg" mb={4}>
+                                Нет анализов для отображения
+                              </Text>
+                              <Button
+                                colorScheme="blue"
+                                onClick={loadLabTests}
+                                isLoading={loading}
+                              >
+                                Обновить список
+                              </Button>
+                            </Box>
+                          )}
+                        </CardBody>
+                      </Card>
+                      {labTests.length < labTotal && (
+                        <Flex justify="center" py={4}>
+                          <Button
+                            onClick={() => loadLabTests(labPage + 1)}
+                            isLoading={loading}
+                            colorScheme="blue"
+                            variant="outline"
+                          >
+                            Загрузить ещё ({labTotal - labTests.length}{" "}
+                            осталось)
+                          </Button>
+                        </Flex>
+                      )}
+                    </TabPanel>
+
+                    {/* Вкладка табличных бланков */}
+                    <TabPanel p={0}>
+                      <Card shadow="xs">
+                        <CardHeader>
+                          <Flex justify="space-between" align="center">
+                            <Text fontSize="xl" fontWeight="bold">
+                              Табличные бланки (
+                              {filteredBlankAssignments.length})
+                            </Text>
+                            <Badge colorScheme="purple">
+                              Всего: {stats.totalBlanks}
+                            </Badge>
+                          </Flex>
+                        </CardHeader>
+                        <CardBody p={0}>
+                          {loadingBlanks ? (
+                            <Flex justify="center" py={20}>
+                              <Spinner size="xl" color="purple.500" />
+                            </Flex>
+                          ) : filteredBlankAssignments.length > 0 ? (
+                            <Box
+                              overflowX="auto"
+                              width={"100%"}
+                              overflowY="auto"
+                            >
+                              <Table variant="simple" size="xs">
+                                <Thead
+                                  bg="purple.50"
+                                  position="sticky"
+                                  top={0}
+                                  zIndex={1}
+                                >
+                                  <Tr>
+                                    <Th>ID</Th>
+                                    <Th>Пациент</Th>
+                                    <Th>Бланк</Th>
+                                    <Th>Отделение</Th>
+                                    <Th>Тип образца</Th>
+                                    <Th>Статус</Th>
+                                    <Th>Дата назначения</Th>
+                                    <Th minW="180px">Действия</Th>
+                                  </Tr>
+                                </Thead>
+                                <Tbody>
+                                  {filteredBlankAssignments.map(
+                                    (assignment) => (
                                       <Tr
-                                        key={test.id}
+                                        key={assignment.id}
                                         _hover={{ bg: "gray.50" }}
-                                        bg={
-                                          test.isAbnormal ? "red.50" : "inherit"
-                                        }
                                       >
-                                        <Td fontWeight="bold">{test.id}</Td>
+                                        <Td fontWeight="bold">
+                                          {assignment.id}
+                                        </Td>
                                         <Td>
                                           <VStack align="start" spacing={0}>
                                             <Text fontWeight="medium">
-                                              {test.client?.surname}{" "}
-                                              {test.client?.name}
+                                              {assignment.client?.surname}{" "}
+                                              {assignment.client?.name}
                                             </Text>
                                             <Text
                                               fontSize="xs"
                                               color="gray.600"
                                             >
-                                              {test.client?.phoneNumber}
+                                              {assignment.client?.phoneNumber}
                                             </Text>
                                           </VStack>
                                         </Td>
                                         <Td>
                                           <VStack align="start" spacing={1}>
-                                            <Badge colorScheme="blue">
-                                              {test.testCode}
-                                            </Badge>
+                                            <Text fontWeight="medium">
+                                              {assignment.blank?.name}
+                                            </Text>
                                             <Text
                                               fontSize="xs"
-                                              fontWeight="medium"
+                                              color="gray.600"
                                             >
-                                              {test.name}
+                                              {assignment.blank?.code ||
+                                                "Без кода"}
                                             </Text>
                                           </VStack>
                                         </Td>
-
                                         <Td>
-                                          {test.result ? (
-                                            <Text
-                                              fontWeight="bold"
-                                              color={
-                                                test.isAbnormal
-                                                  ? "red.600"
-                                                  : "green.600"
-                                              }
-                                            >
-                                              {test.result} {test.unit}
-                                            </Text>
-                                          ) : (
-                                            <Text color="gray.400">—</Text>
-                                          )}
+                                          <Badge colorScheme="purple">
+                                            {assignment.blank?.department ||
+                                              "—"}
+                                          </Badge>
                                         </Td>
                                         <Td fontSize="xs">
-                                          <Tooltip
-                                            label="Из категории"
-                                            placement="top"
-                                          >
-                                            <Text>
-                                              {test.referenceText ||
-                                                (test.referenceMin &&
-                                                test.referenceMax
-                                                  ? `${test.referenceMin}-${test.referenceMax} ${test.unit}`
-                                                  : "—")}
-                                            </Text>
-                                          </Tooltip>
+                                          {assignment.sampleType ||
+                                            assignment.blank?.sampleType ||
+                                            "—"}
                                         </Td>
                                         <Td>
-                                          {test.ready ? (
+                                          {assignment.ready ? (
                                             <Badge
                                               colorScheme="green"
                                               px={2}
@@ -1325,345 +1420,166 @@ function Cabinet() {
                                             </Badge>
                                           )}
                                         </Td>
-
+                                        <Td fontSize="xs">
+                                          {new Date(
+                                            assignment.createdAt,
+                                          ).toLocaleDateString("ru-RU")}
+                                        </Td>
                                         <Td>
                                           <HStack spacing={2}>
                                             <Button
+                                              minW="96px"
                                               size="xs"
-                                              colorScheme="blue"
+                                              colorScheme="purple"
                                               onClick={() =>
-                                                handleOpenTest(test)
+                                                handleOpenBlank(assignment)
                                               }
-                                              leftIcon={
-                                                test.ready ? (
-                                                  <ViewIcon />
-                                                ) : (
-                                                  <EditIcon />
-                                                )
-                                              }
+                                              leftIcon={<EditIcon />}
+                                              isDisabled={assignment.ready}
                                             >
-                                              {test.ready
-                                                ? "Просмотр"
-                                                : "Заполнить"}
+                                              Заполнить
+                                            </Button>
+                                            <Button
+                                              minW="96px"
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() =>
+                                                handleViewBlank(assignment)
+                                              }
+                                              leftIcon={<ViewIcon />}
+                                            >
+                                              Просмотр
                                             </Button>
                                           </HStack>
                                         </Td>
-                                        <Td fontSize="xs">
-                                          {new Date(
-                                            test.createdAt,
-                                          ).toLocaleDateString("ru-RU")}
-                                        </Td>
                                       </Tr>
-                                    ))}
-                                  </Tbody>
-                                </Table>
-                              </Box>
-                            ) : (
-                              <Box textAlign="center" py={20}>
-                                <Text color="gray.500" fontSize="lg" mb={4}>
-                                  Нет анализов для отображения
-                                </Text>
-                                <Button
-                                  colorScheme="blue"
-                                  onClick={loadLabTests}
-                                  isLoading={loading}
-                                >
-                                  Обновить список
-                                </Button>
-                              </Box>
-                            )}
-                          </CardBody>
-                        </Card>
-                        {labTests.length < labTotal && (
-                          <Flex justify="center" py={4}>
-                            <Button
-                              onClick={() => loadLabTests(labPage + 1)}
-                              isLoading={loading}
-                              colorScheme="blue"
-                              variant="outline"
-                            >
-                              Загрузить ещё ({labTotal - labTests.length}{" "}
-                              осталось)
-                            </Button>
-                          </Flex>
-                        )}
-                      </TabPanel>
-
-                      {/* Вкладка табличных бланков */}
-                      <TabPanel p={0}>
-                        <Card shadow="xs">
-                          <CardHeader>
-                            <Flex justify="space-between" align="center">
-                              <Text fontSize="xl" fontWeight="bold">
-                                Табличные бланки (
-                                {filteredBlankAssignments.length})
+                                    ),
+                                  )}
+                                </Tbody>
+                              </Table>
+                            </Box>
+                          ) : (
+                            <Box textAlign="center" py={20}>
+                              <Text color="gray.500" fontSize="lg" mb={4}>
+                                Нет табличных бланков для отображения
                               </Text>
-                              <Badge colorScheme="purple">
-                                Всего: {stats.totalBlanks}
-                              </Badge>
-                            </Flex>
-                          </CardHeader>
-                          <CardBody p={0}>
-                            {loadingBlanks ? (
-                              <Flex justify="center" py={20}>
-                                <Spinner size="xl" color="purple.500" />
-                              </Flex>
-                            ) : filteredBlankAssignments.length > 0 ? (
-                              <Box
-                                overflowX="auto"
-                                width={"100%"}
-                                overflowY="auto"
+                              <Button
+                                colorScheme="purple"
+                                onClick={loadBlankAssignments}
+                                isLoading={loadingBlanks}
                               >
-                                <Table variant="simple" size="xs">
-                                  <Thead
-                                    bg="purple.50"
-                                    position="sticky"
-                                    top={0}
-                                    zIndex={1}
-                                  >
-                                    <Tr>
-                                      <Th>ID</Th>
-                                      <Th>Пациент</Th>
-                                      <Th>Бланк</Th>
-                                      <Th>Отделение</Th>
-                                      <Th>Тип образца</Th>
-                                      <Th>Статус</Th>
-                                      <Th>Дата назначения</Th>
-                                      <Th minW="180px">Действия</Th>
-                                    </Tr>
-                                  </Thead>
-                                  <Tbody>
-                                    {filteredBlankAssignments.map(
-                                      (assignment) => (
-                                        <Tr
-                                          key={assignment.id}
-                                          _hover={{ bg: "gray.50" }}
-                                        >
-                                          <Td fontWeight="bold">
-                                            {assignment.id}
-                                          </Td>
-                                          <Td>
-                                            <VStack align="start" spacing={0}>
-                                              <Text fontWeight="medium">
-                                                {assignment.client?.surname}{" "}
-                                                {assignment.client?.name}
-                                              </Text>
-                                              <Text
-                                                fontSize="xs"
-                                                color="gray.600"
-                                              >
-                                                {assignment.client?.phoneNumber}
-                                              </Text>
-                                            </VStack>
-                                          </Td>
-                                          <Td>
-                                            <VStack align="start" spacing={1}>
-                                              <Text fontWeight="medium">
-                                                {assignment.blank?.name}
-                                              </Text>
-                                              <Text
-                                                fontSize="xs"
-                                                color="gray.600"
-                                              >
-                                                {assignment.blank?.code ||
-                                                  "Без кода"}
-                                              </Text>
-                                            </VStack>
-                                          </Td>
-                                          <Td>
-                                            <Badge colorScheme="purple">
-                                              {assignment.blank?.department ||
-                                                "—"}
-                                            </Badge>
-                                          </Td>
-                                          <Td fontSize="xs">
-                                            {assignment.sampleType ||
-                                              assignment.blank?.sampleType ||
-                                              "—"}
-                                          </Td>
-                                          <Td>
-                                            {assignment.ready ? (
-                                              <Badge
-                                                colorScheme="green"
-                                                px={2}
-                                                py={1}
-                                              >
-                                                Готово
-                                              </Badge>
-                                            ) : (
-                                              <Badge
-                                                colorScheme="yellow"
-                                                px={2}
-                                                py={1}
-                                              >
-                                                В работе
-                                              </Badge>
-                                            )}
-                                          </Td>
-                                          <Td fontSize="xs">
-                                            {new Date(
-                                              assignment.createdAt,
-                                            ).toLocaleDateString("ru-RU")}
-                                          </Td>
-                                          <Td>
-                                            <HStack spacing={2}>
-                                              <Button
-                                                minW="96px"
-                                                size="xs"
-                                                colorScheme="purple"
-                                                onClick={() =>
-                                                  handleOpenBlank(assignment)
-                                                }
-                                                leftIcon={<EditIcon />}
-                                                isDisabled={assignment.ready}
-                                              >
-                                                Заполнить
-                                              </Button>
-                                              <Button
-                                                minW="96px"
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() =>
-                                                  handleViewBlank(assignment)
-                                                }
-                                                leftIcon={<ViewIcon />}
-                                              >
-                                                Просмотр
-                                              </Button>
-                                            </HStack>
-                                          </Td>
-                                        </Tr>
-                                      ),
-                                    )}
-                                  </Tbody>
-                                </Table>
-                              </Box>
-                            ) : (
-                              <Box textAlign="center" py={20}>
-                                <Text color="gray.500" fontSize="lg" mb={4}>
-                                  Нет табличных бланков для отображения
+                                Обновить список
+                              </Button>
+                            </Box>
+                          )}
+                        </CardBody>
+                      </Card>
+                    </TabPanel>
+
+                    {/* Вкладка профиля и статистики */}
+                    <TabPanel p={0}>
+                      <Grid
+                        templateColumns={{ base: "1fr", lg: "2fr 1fr" }}
+                        gap={6}
+                      >
+                        <Card>
+                          <CardHeader>
+                            <Text fontSize="xl" fontWeight="bold">
+                              Подробная статистика
+                            </Text>
+                          </CardHeader>
+                          <CardBody>
+                            <VStack spacing={6} align="stretch">
+                              <Box>
+                                <Text fontWeight="bold" mb={2}>
+                                  Прогресс выполнения за сегодня
                                 </Text>
-                                <Button
-                                  colorScheme="purple"
-                                  onClick={loadBlankAssignments}
-                                  isLoading={loadingBlanks}
-                                >
-                                  Обновить список
-                                </Button>
+                                <Progress
+                                  value={
+                                    (stats.todayTests /
+                                      Math.max(stats.totalTests, 1)) *
+                                    100
+                                  }
+                                  colorScheme="blue"
+                                  size="lg"
+                                  borderRadius="full"
+                                />
+                                <Text fontSize="sm" color="gray.600" mt={2}>
+                                  Выполнено {stats.todayTests} из{" "}
+                                  {stats.totalTests} анализов сегодня
+                                </Text>
                               </Box>
-                            )}
+
+                              <SimpleGrid columns={2} spacing={4}>
+                                <Card bg="blue.50">
+                                  <CardBody>
+                                    <Stat>
+                                      <StatLabel>Общая эффективность</StatLabel>
+                                      <StatNumber>
+                                        {stats.totalTests + stats.totalBlanks >
+                                        0
+                                          ? Math.round(
+                                              ((stats.completedTests +
+                                                stats.completedBlanks) /
+                                                (stats.totalTests +
+                                                  stats.totalBlanks)) *
+                                                100,
+                                            )
+                                          : 0}
+                                        %
+                                      </StatNumber>
+                                    </Stat>
+                                  </CardBody>
+                                </Card>
+                                <Card bg="green.50">
+                                  <CardBody>
+                                    <Stat>
+                                      <StatLabel>
+                                        Среднее время выполнения
+                                      </StatLabel>
+                                      <StatNumber>24ч</StatNumber>
+                                    </Stat>
+                                  </CardBody>
+                                </Card>
+                              </SimpleGrid>
+                            </VStack>
                           </CardBody>
                         </Card>
-                      </TabPanel>
 
-                      {/* Вкладка профиля и статистики */}
-                      <TabPanel p={0}>
-                        <Grid
-                          templateColumns={{ base: "1fr", lg: "2fr 1fr" }}
-                          gap={6}
-                        >
-                          <Card>
-                            <CardHeader>
-                              <Text fontSize="xl" fontWeight="bold">
-                                Подробная статистика
-                              </Text>
-                            </CardHeader>
-                            <CardBody>
-                              <VStack spacing={6} align="stretch">
-                                <Box>
-                                  <Text fontWeight="bold" mb={2}>
-                                    Прогресс выполнения за сегодня
-                                  </Text>
-                                  <Progress
-                                    value={
-                                      (stats.todayTests /
-                                        Math.max(stats.totalTests, 1)) *
-                                      100
-                                    }
-                                    colorScheme="blue"
-                                    size="lg"
-                                    borderRadius="full"
-                                  />
-                                  <Text fontSize="sm" color="gray.600" mt={2}>
-                                    Выполнено {stats.todayTests} из{" "}
-                                    {stats.totalTests} анализов сегодня
-                                  </Text>
-                                </Box>
-
-                                <SimpleGrid columns={2} spacing={4}>
-                                  <Card bg="blue.50">
-                                    <CardBody>
-                                      <Stat>
-                                        <StatLabel>
-                                          Общая эффективность
-                                        </StatLabel>
-                                        <StatNumber>
-                                          {stats.totalTests +
-                                            stats.totalBlanks >
-                                          0
-                                            ? Math.round(
-                                                ((stats.completedTests +
-                                                  stats.completedBlanks) /
-                                                  (stats.totalTests +
-                                                    stats.totalBlanks)) *
-                                                  100,
-                                              )
-                                            : 0}
-                                          %
-                                        </StatNumber>
-                                      </Stat>
-                                    </CardBody>
-                                  </Card>
-                                  <Card bg="green.50">
-                                    <CardBody>
-                                      <Stat>
-                                        <StatLabel>
-                                          Среднее время выполнения
-                                        </StatLabel>
-                                        <StatNumber>24ч</StatNumber>
-                                      </Stat>
-                                    </CardBody>
-                                  </Card>
-                                </SimpleGrid>
-                              </VStack>
-                            </CardBody>
-                          </Card>
-
-                          <Card>
-                            <CardHeader>
-                              <Text fontSize="xl" fontWeight="bold">
-                                Информация о профиле
-                              </Text>
-                            </CardHeader>
-                            <CardBody>
-                              <VStack spacing={4} align="stretch">
-                                <FormControl>
-                                  <FormLabel>Имя</FormLabel>
-                                  <Input value={user.name} readOnly />
-                                </FormControl>
-                                <FormControl>
-                                  <FormLabel>Фамилия</FormLabel>
-                                  <Input value={user.surname} readOnly />
-                                </FormControl>
-                                <FormControl>
-                                  <FormLabel>Должность</FormLabel>
-                                  <Input
-                                    value={user.profession || "Врач-лаборант"}
-                                    readOnly
-                                  />
-                                </FormControl>
-                                <Button colorScheme="blue" w="100%">
-                                  Изменить пароль
-                                </Button>
-                              </VStack>
-                            </CardBody>
-                          </Card>
-                        </Grid>
-                      </TabPanel>
-                    </TabPanels>
-                  </Tabs>
-                </Box>
-              </Grid>
+                        <Card>
+                          <CardHeader>
+                            <Text fontSize="xl" fontWeight="bold">
+                              Информация о профиле
+                            </Text>
+                          </CardHeader>
+                          <CardBody>
+                            <VStack spacing={4} align="stretch">
+                              <FormControl>
+                                <FormLabel>Имя</FormLabel>
+                                <Input value={user.name} readOnly />
+                              </FormControl>
+                              <FormControl>
+                                <FormLabel>Фамилия</FormLabel>
+                                <Input value={user.surname} readOnly />
+                              </FormControl>
+                              <FormControl>
+                                <FormLabel>Должность</FormLabel>
+                                <Input
+                                  value={user.profession || "Врач-лаборант"}
+                                  readOnly
+                                />
+                              </FormControl>
+                              <Button colorScheme="blue" w="100%">
+                                Изменить пароль
+                              </Button>
+                            </VStack>
+                          </CardBody>
+                        </Card>
+                      </Grid>
+                    </TabPanel>
+                  </TabPanels>
+                </Tabs>
+              </Box>
             </CardBody>
           </Card>
         </Box>
